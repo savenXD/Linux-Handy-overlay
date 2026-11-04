@@ -1,12 +1,12 @@
-# Cronq v1.0.0 for Windows
+# Cronq v1.1.1 for Windows
 
 Cronq is a floating companion window shaped like a phone (default 360x640 pixels, rounded corners, dark theme) that stays visible on top of other software—including borderless-fullscreen apps and games—without ever stealing keyboard focus. Inside it: a mobile browser, ChatGPT with persistent login sessions, Ghost Typer for human-like automated typing, clean screen captures (Snap) excluding the overlay, and the ability to type into the overlay without losing focus on whatever app you are using underneath.
 
 The Windows release is a native C++17 implementation using Win32 and Microsoft Edge WebView2.
-Version 1.0.0 includes Light/Dark themes, transparent camouflage, temporary locking, and saved corner docking.
+Version 1.1.1 includes Light/Dark themes, transparent camouflage, temporary locking, and saved corner docking.
 Native Windows checks cover transparent text rendering, theme persistence, lock behavior, shortcuts,
 and docking across a restart. ChatGPT styling is tested with a local fixture; live site changes and
-application-specific behavior can still require adjustments. See [release notes](v1.0.0.md) and
+application-specific behavior can still require adjustments. See [release notes](v1.1.1.md) and
 [PARITY.md](PARITY.md) for evidence and limits.
 
 [Download the latest Windows installer](https://github.com/savenXD/Linux-Handy-overlay/releases/latest/download/cronq-setup.exe).
@@ -102,6 +102,13 @@ Lock state is not saved: restarting Cronq starts unlocked.
 ---
 
 ## Mouse Controls
+
+### Hidden from screen recorders (always on)
+
+Cronq excludes its window from screen capture with `WDA_EXCLUDEFROMCAPTURE`. You see it normally, but
+full-screen recordings, screen sharing and screenshots do not contain it. It is on by default; there is no
+hotkey. To turn it off, set `hide_from_capture = false` under `[Privacy]` in `config.ini`.
+Needs Windows 10 2004+. It does not hide your other windows or a physical camera.
 
 ### Appearance: Dark, Light and Camouflage
 

@@ -183,7 +183,7 @@ void OnSnapTimeout() {
 
     // Restore overlay visibility/affinity immediately
     if (g_usedAffinity) {
-        SetWindowDisplayAffinity(overlay::Hwnd(), 0);  // WDA_NONE
+        SetWindowDisplayAffinity(overlay::Hwnd(), overlay::CaptureAffinity());
     } else if (g_wasVisibleDuringSnap && overlay::IsVisible()) {
         SetWindowPos(overlay::Hwnd(), HWND_TOPMOST, 0, 0, 0, 0,
                      SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
@@ -289,7 +289,7 @@ bool Init() {
 
 void Cleanup() {
     if (g_usedAffinity)
-        SetWindowDisplayAffinity(overlay::Hwnd(), 0);
+        SetWindowDisplayAffinity(overlay::Hwnd(), overlay::CaptureAffinity());
     else if (g_isSnapping && g_wasVisibleDuringSnap && overlay::IsVisible())
         SetWindowPos(overlay::Hwnd(), HWND_TOPMOST, 0, 0, 0, 0,
                      SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);

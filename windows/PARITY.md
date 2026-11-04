@@ -1,5 +1,13 @@
 # Windows parity and verification
 
+## v1.1.1 capture protection — PENDING native verification
+
+| Area | Evidence | Open |
+| :--- | :--- | :--- |
+| Overlay excluded from capture (`WDA_EXCLUDEFROMCAPTURE`) | Cross-compiles; config default unit-tested | Verify on real Windows with Zoom, Meet, OBS and `getDisplayMedia`: overlay absent, still visible locally |
+| WebView2 popups/menus excluded | 150 ms sweep of Cronq process tree (code review only) | Confirm dropdown, context menu, permission prompt and file picker are absent from a recording |
+| Fail-closed on unsupported Windows | Code path only | Test on Windows 10 older than 2004 |
+
 ## v1.0.0 native Windows update — 2026-11-05
 
 The following checks now have native Windows evidence in addition to the historical audit below:

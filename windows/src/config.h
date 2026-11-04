@@ -33,6 +33,7 @@ struct AppConfig {
     char ghostKey = 'g';
     char snapKey = 'p';
     bool shieldClipboardKeys = true;
+    bool hideFromCapture = true;  // [Privacy] hide_from_capture (default ON)
 
     std::string snapScope = "monitor";  // "monitor" or "all"
     int snapDelayMs = 80;

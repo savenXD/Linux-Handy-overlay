@@ -163,6 +163,7 @@ void ShowPrompt() {
         hotkey::SetKillPending(false);  // the hook already claimed Enter/Esc; give them back
         return;
     }
+    overlay::ProtectAllWindows();
     hotkey::SetKillPending(true);
     SetTimer(g_prompt, kTimeoutTimer, kTimeoutMs, nullptr);
     ShowWindow(g_prompt, SW_SHOWNOACTIVATE);

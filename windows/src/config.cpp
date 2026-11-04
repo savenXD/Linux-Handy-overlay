@@ -46,6 +46,10 @@ const char* const kDefaultIni =
     "snap_key = p\n"
     "ghost_writer_key = w\n"
     "\n"
+    "[Privacy]\n"
+    "# Hides the overlay from screen recorders and screen sharing (you still see it). On by default.\n"
+    "hide_from_capture = true\n"
+    "\n"
     "[Snap]\n"
     "# Options: monitor (primary), all (all screens)\n"
     "snap_scope = monitor\n"
@@ -191,6 +195,9 @@ void ParseInto(const std::string& text, AppConfig* cfg) {
     if (GetStr(ini, "Browser", "search_url_template", &s)) cfg->searchUrlTemplate = s;
     if (GetStr(ini, "Browser", "user_agent", &s)) cfg->userAgent = s;
     if (GetStr(ini, "Browser", "chatgpt_allowlist", &s)) cfg->chatgptAllowlist = s;
+
+    // [Privacy]
+    if (GetBool(ini, "Privacy", "hide_from_capture", &b)) cfg->hideFromCapture = b;
 
     // [Hotkeys]
     if (GetStr(ini, "Hotkeys", "toggle_key", &s)) cfg->toggleKey = s[0];

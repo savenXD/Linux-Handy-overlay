@@ -26,6 +26,18 @@ int main(int argc, char** argv) {
     ss << f.rdbuf();
     CHECK(!ss.str().empty());
 
+    // Privacy: capture protection is ON by default, with or without the key in an older config.ini.
+    {
+        AppConfig d;
+        CHECK(d.hideFromCapture);
+        AppConfig old;
+        config::ParseInto("[General]\nwidth = 360\n", &old);
+        CHECK(old.hideFromCapture);
+        AppConfig off;
+        config::ParseInto("[Privacy]\nhide_from_capture = false\n", &off);
+        CHECK(!off.hideFromCapture);
+    }
+
     // 1. The shared default file parses to the built-in defaults.
     AppConfig c;
     config::ParseInto(ss.str(), &c);

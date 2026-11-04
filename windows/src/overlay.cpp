@@ -14,6 +14,7 @@
 #include "theme.h"
 
 #include <wtsapi32.h>
+#include <tlhelp32.h>
 #include <cstdio>
 #include <climits>
 #include <cstdlib>
@@ -24,6 +25,10 @@ namespace cronq {
 namespace overlay {
 
 namespace {
+
+constexpr DWORD kAffinityExclude = 0x00000011;  // WDA_EXCLUDEFROMCAPTURE
+constexpr UINT_PTR kProtectTimerId = 0x4352;
+constexpr UINT kProtectIntervalMs = 150;
 
 const wchar_t* const kClassName = L"CronqOverlayWindow";
 constexpr UINT_PTR kToastTimerId = 1;
@@ -668,6 +673,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             }
             break;
         case WM_TIMER:
+            if (wp == kProtectTimerId) {
+                ProtectAllWindows();
+                return 0;
+            }
             if (wp == kDragTimerId) {
                 if (g_drag == DragNone || !(GetAsyncKeyState(VK_LBUTTON) & 0x8000)) {
                     KillTimer(hwnd, kDragTimerId);
@@ -796,6 +805,72 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 
 // ---------------------------------------------------------------- public API
 
+static bool g_captureHidden = false;
+
+unsigned CaptureAffinity() { return g_captureHidden ? kAffinityExclude : 0u; }
+
+bool SetCaptureHidden(bool hidden) {
+    if (!g_hwnd) return false;
+    if (!SetWindowDisplayAffinity(g_hwnd, hidden ? kAffinityExclude : 0u)) {
+        LogErr("WINDOW", "SetWindowDisplayAffinity failed (%lu); capture exclusion needs Windows 10 2004+.",
+               GetLastError());
+        return false;
+    }
+    g_captureHidden = hidden;
+    if (hidden) SetTimer(g_hwnd, kProtectTimerId, kProtectIntervalMs, nullptr);
+    else KillTimer(g_hwnd, kProtectTimerId);
+    return true;
+}
+
+namespace {
+
+// Our process plus every descendant (the WebView2 browser/renderer/GPU processes).
+std::vector<DWORD> OwnProcessTree() {
+    std::vector<DWORD> ids{GetCurrentProcessId()};
+    HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snap == INVALID_HANDLE_VALUE) return ids;
+    std::vector<std::pair<DWORD, DWORD>> procs;  // pid, parent
+    PROCESSENTRY32W pe;
+    pe.dwSize = sizeof(pe);
+    for (BOOL ok = Process32FirstW(snap, &pe); ok; ok = Process32NextW(snap, &pe))
+        procs.emplace_back(pe.th32ProcessID, pe.th32ParentProcessID);
+    CloseHandle(snap);
+    for (size_t grew = 1; grew;) {  // fixed point: add children of anything already in the set
+        grew = 0;
+        for (const auto& p : procs)
+            if (std::find(ids.begin(), ids.end(), p.second) != ids.end() &&
+                std::find(ids.begin(), ids.end(), p.first) == ids.end()) {
+                ids.push_back(p.first);
+                ++grew;
+            }
+    }
+    return ids;
+}
+
+struct SweepCtx {
+    const std::vector<DWORD>* pids;
+};
+
+BOOL CALLBACK ProtectEnumProc(HWND hwnd, LPARAM lp) {
+    const auto* ctx = reinterpret_cast<SweepCtx*>(lp);
+    DWORD pid = 0;
+    GetWindowThreadProcessId(hwnd, &pid);
+    if (std::find(ctx->pids->begin(), ctx->pids->end(), pid) == ctx->pids->end()) return TRUE;
+    DWORD cur = 0;
+    if (GetWindowDisplayAffinity(hwnd, &cur) && cur != kAffinityExclude)
+        SetWindowDisplayAffinity(hwnd, kAffinityExclude);  // other process: may be refused; best effort
+    return TRUE;
+}
+
+}  // namespace
+
+void ProtectAllWindows() {
+    if (!g_captureHidden) return;
+    const std::vector<DWORD> pids = OwnProcessTree();
+    SweepCtx ctx{&pids};
+    EnumWindows(ProtectEnumProc, reinterpret_cast<LPARAM>(&ctx));
+}
+
 bool Init(bool startVisible) {
     g_inst = GetModuleHandleW(nullptr);
     const AppConfig& cfg = config::Get();
@@ -831,6 +906,17 @@ bool Init(bool startVisible) {
     }
     ApplyAlpha();
     UpdateRegion();
+    if (cfg.hideFromCapture && !SetCaptureHidden(true)) {
+        // Fail closed: never run visible to recorders when the user asked for protection.
+        MessageBoxW(nullptr,
+                    L"Cronq cannot hide itself from screen capture on this Windows version (needs Windows 10 2004 or "
+                    L"newer), so it will not start.\n\nTo run anyway, set hide_from_capture = false under [Privacy] in "
+                    L"config.ini.",
+                    L"Cronq", MB_OK | MB_ICONWARNING | MB_TOPMOST);
+        DestroyWindow(g_hwnd);
+        g_hwnd = nullptr;
+        return false;
+    }
     hotkey::UpdateOverlayRect(g_x, g_y, g_x + g_w, g_y + g_h);
     Log("WINDOW", "Created overlay window HWND 0x%llx (%dx%d at %d,%d, dpi=%u)",
         (unsigned long long)(UINT_PTR)g_hwnd, g_w, g_h, g_x, g_y, g_dpi);
@@ -926,6 +1012,7 @@ void ApplyConfig() {
     DefaultDimensions(mon, &g_w, &g_h);
     if (g_app == "home") g_h = std::min(g_h, S(kCompactHeight));
     g_opacity = cfg.opacity;
+    if (cfg.hideFromCapture != g_captureHidden) SetCaptureHidden(cfg.hideFromCapture);
     g_maximized = false;
     g_userMoved = false;
     CalcPosition(&g_x, &g_y);

@@ -37,6 +37,11 @@ void QueueDraw();
 void RefreshAppearance();
 void ShowToast(const std::string& msg);
 
+// Capture protection (WDA_EXCLUDEFROMCAPTURE). The overlay stays visible to you but not to recorders / screen sharing.
+bool SetCaptureHidden(bool hidden);   // main overlay window; false if Windows refuses (needs 10 2004+)
+void ProtectAllWindows();             // also marks popups/menus of Cronq and its WebView2 processes
+unsigned CaptureAffinity();   // affinity value to restore after a temporary change (snap)
+
 double Scale();
 void BeginExternalDrag(bool move, int edges);
 void ToggleHeight();
