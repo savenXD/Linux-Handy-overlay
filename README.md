@@ -32,13 +32,22 @@ Then run `cronq` (or find **Cronq** in your app menu). Remove it later with `./u
 ### 🪟 Windows 10/11 (64-bit) — PowerShell
 > ⚠️ The Windows port is **beta**: it passes cross-build/Wine tests but hasn't been fully verified on real Windows yet. See [windows/PARITY.md](windows/PARITY.md).
 
-**One command (no CMake, no Visual Studio, no admin rights):**
+#### Option A — Download the installer (.exe) — recommended, no dependencies
+No Git, CMake, Visual Studio or admin rights needed. Pick either way:
+
+**1. Click-to-download**
+1. Open the [latest release](https://github.com/savenXD/Linux-Handy-overlay/releases/latest).
+2. Under **Assets**, download **`cronq-setup.exe`**.
+3. Double-click it and follow the wizard.
+4. If Windows SmartScreen warns (the build is unsigned): click **More info → Run anyway**.
+
+**2. One PowerShell command**
 ```powershell
 irm https://github.com/savenXD/Linux-Handy-overlay/releases/latest/download/cronq-setup.exe -OutFile $env:TEMP\cronq-setup.exe; & $env:TEMP\cronq-setup.exe
 ```
-Or download `cronq-setup.exe` from the [Releases page](https://github.com/savenXD/Linux-Handy-overlay/releases/latest) and double-click it. The build is unsigned, so if SmartScreen warns, click **More info → Run anyway**. The installer fetches the WebView2 runtime if missing.
+The installer fetches the Microsoft Edge WebView2 runtime automatically if it is missing.
 
-<details><summary>Build from source instead</summary>
+<details><summary>Option B — Build from source (needs dependencies)</summary>
 
 (needs Git, CMake and Visual Studio Build Tools with the C++ workload)
 ```powershell
