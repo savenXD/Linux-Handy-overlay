@@ -214,6 +214,10 @@ LRESULT CALLBACK LowLevelKeyboardProc(int code, WPARAM wp, LPARAM lp) {
         }
         context.hotkey = true;  // swallow the key (and its release) so no other app sees it
     }
+    else if (locked && mods == 1 && (vk == 'K' || vk == 'X')) {
+        // Locked: swallow the chord keys (no action, id stays None) so the focused app never sees Alt+K / Alt+X.
+        context.hotkey = true;
+    }
     context.guard = InterlockedCompareExchange(&g_guardActive, 0, 0) != 0;
     context.target = InterlockedCompareExchange(&g_typingTarget, 0, 0) != 0;
     context.exclusive = InterlockedCompareExchange(&g_keyMode, 0, 0) != 0;

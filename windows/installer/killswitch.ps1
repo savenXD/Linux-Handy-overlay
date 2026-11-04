@@ -66,7 +66,7 @@ foreach ($key in 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run',
     }
 }
 $startup = [Environment]::GetFolderPath('Startup')
-if ($startup) { Get-ChildItem -LiteralPath $startup -Filter '*cronq*' -ErrorAction SilentlyContinue | ForEach-Object { Remove-Path $_.FullName } }
+if ($startup) { Get-ChildItem -LiteralPath $startup -Filter '*cronq*.lnk' -ErrorAction SilentlyContinue | ForEach-Object { Remove-Path $_.FullName } }
 if (Get-Command Get-ScheduledTask -ErrorAction SilentlyContinue) {
     Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object { $_.TaskName -match 'cronq' } | ForEach-Object {
         if ($DryRun) { Step "would remove scheduled task $($_.TaskName)" }
@@ -78,15 +78,26 @@ if (Get-Command Get-ScheduledTask -ErrorAction SilentlyContinue) {
 foreach ($folder in [Environment]::GetFolderPath('Programs'), [Environment]::GetFolderPath('Desktop'),
                     [Environment]::GetFolderPath('CommonPrograms'), [Environment]::GetFolderPath('CommonDesktopDirectory')) {
     if (-not $folder -or -not (Test-Path -LiteralPath $folder)) { continue }
-    Get-ChildItem -LiteralPath $folder -Filter '*cronq*' -ErrorAction SilentlyContinue | ForEach-Object { Remove-Path $_.FullName }
+    # Only Cronq's own shortcut files and its Start Menu folder, never unrelated user files that merely contain the word.
+    Get-ChildItem -LiteralPath $folder -Filter '*cronq*.lnk' -File -ErrorAction SilentlyContinue | ForEach-Object { Remove-Path $_.FullName }
+    if ($folder -eq [Environment]::GetFolderPath('Programs') -or $folder -eq [Environment]::GetFolderPath('CommonPrograms')) {
+        $menuDir = Join-Path $folder 'Cronq'   # Start Menu folder only; never a Desktop folder
+        if (Test-Path -LiteralPath $menuDir -PathType Container) { Remove-Path $menuDir }
+    }
 }
 
 # ---- 4. User PATH, installer/uninstall registry entries -----------------------------------------
-$userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-if ($userPath -and $userPath.ToLowerInvariant().Contains($InstallDir.ToLowerInvariant())) {
-    $kept = $userPath.Split(';') | Where-Object { $_ -and $_.TrimEnd('\') -ine $InstallDir }
-    if ($DryRun) { Step "would remove $InstallDir from user PATH" }
-    else { [Environment]::SetEnvironmentVariable('Path', ($kept -join ';'), 'User'); Step 'removed from user PATH' }
+$envKey = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment', -not $DryRun)
+if ($envKey) {
+    # Read unexpanded and write back as REG_EXPAND_SZ so other %VAR% entries in PATH survive.
+    $userPath = [string]$envKey.GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+    $parts = @($userPath.Split(';') | Where-Object { $_ })
+    $kept = @($parts | Where-Object { $_.TrimEnd('\') -ine $InstallDir })
+    if ($kept.Count -ne $parts.Count) {
+        if ($DryRun) { Step "would remove $InstallDir from user PATH" }
+        else { $envKey.SetValue('Path', ($kept -join ';'), [Microsoft.Win32.RegistryValueKind]::ExpandString); Step 'removed from user PATH' }
+    }
+    $envKey.Close()
 }
 foreach ($key in 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Cronq.Windows_is1',
                  'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Cronq.Windows_is1',

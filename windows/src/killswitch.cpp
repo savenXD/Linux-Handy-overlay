@@ -102,7 +102,11 @@ bool LaunchCleanup() {
         LogErr("KILL", "Could not copy cleanup script (%lu).", GetLastError());
         return false;
     }
-    std::wstring cmd = L"powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File \"" +
+    // Absolute path: never let a powershell.exe next to Cronq or in %TEMP% be picked up by the search order.
+    wchar_t sys[MAX_PATH] = {};
+    GetSystemDirectoryW(sys, MAX_PATH);
+    const std::wstring ps = std::wstring(sys) + L"\\WindowsPowerShell\\v1.0\\powershell.exe";
+    std::wstring cmd = L"\"" + ps + L"\" -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File \"" +
                        copy + L"\" -InstallDir \"" + installDir + L"\" -ParentPid " +
                        std::to_wstring(GetCurrentProcessId());
     std::vector<wchar_t> buf(cmd.begin(), cmd.end());
