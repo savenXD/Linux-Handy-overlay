@@ -17,6 +17,11 @@ enum class Id : int {
     Snap,         // Alt+P
     Mode,         // Alt+M
     GhostWrite,   // Alt+W
+    Lock,         // Alt+K (hide + disable every other hotkey)
+    Unlock,       // Alt+K+X chord while locked
+    KillPrompt,   // Alt+Shift+K
+    KillConfirm,  // Enter while the kill prompt is up
+    KillCancel,   // Esc while the kill prompt is up
     Count
 };
 
@@ -36,6 +41,8 @@ void SetTypingGuard(bool active);
 bool IsHookInstalled();
 bool CapsLockOn();
 void Reinstall();
+bool IsLocked();
+void SetKillPending(bool pending);  // hook thread owns Enter/Esc while true
 
 }  // namespace hotkey
 }  // namespace cronq

@@ -75,6 +75,18 @@ All global shortcuts use the **Alt + key** chord. The focused application does n
 | **Alt+P** | Snap screenshot (saved to `Pictures\cronq` & clipboard) | `snap_key` | `p` |
 | **Alt+M** | Cycle typing mode: Mirror ⇄ Exclusive | `mode_key` | `m` |
 | **Alt+W** | Ghost Writer start / cancel typing | `ghost_writer_key` | `w` |
+| **Alt+K** | **Lock**: hide the overlay and disable every other Cronq shortcut. No confirmation. | *fixed* | `k` |
+| **Alt+K+X** | **Unlock** (hold Alt and K, then X, or X then K): shortcuts work again and the overlay reappears | *fixed* | `k`+`x` |
+| **Alt+Shift+K** | **Kill switch**: on-screen prompt; **Enter** confirms, **Esc** (or 15 s of no answer) cancels | *fixed* | `k` |
+
+### Kill switch (Alt+Shift+K)
+On **Enter**, Cronq quits and a detached cleanup script (`killswitch.ps1`, run from `%TEMP%`) removes it from the PC:
+all Cronq processes (including the supervisor and WebView2 helpers), the autostart Run entries, any Startup-folder
+shortcut or scheduled task named cronq, Start Menu/Desktop shortcuts, the user PATH entry, the installer's
+uninstall registry entry, the install folder, `%LOCALAPPDATA%\cronq`, `%APPDATA%\cronq`, `Pictures\cronq`
+(screenshots) and leftover `cronq*` files in `%TEMP%`. It cannot be undone; reinstall by downloading the setup again.
+For portable/developer builds outside `%LOCALAPPDATA%\Programs\Cronq` only Cronq's own files are deleted, never the whole folder.
+Lock state is not saved: restarting Cronq starts unlocked.
 
 ---
 

@@ -53,6 +53,8 @@ if (Test-Path $LoaderDll) {
     Copy-Item $LoaderDll -Destination $InstallDir -Force
 }
 
+Copy-Item (Join-Path $ScriptDir "killswitch.ps1") -Destination $InstallDir -Force
+
 # Copy UI folder
 $UiSrc = Join-Path $BinDir "ui"
 if (-not (Test-Path (Join-Path $UiSrc "index.html"))) { throw "Built UI assets missing" }

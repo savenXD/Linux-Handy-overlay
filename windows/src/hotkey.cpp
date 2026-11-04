@@ -5,6 +5,8 @@
 #include "ghost.h"
 #include "input.h"
 #include "input_logic.h"
+#include "killswitch.h"
+#include "lock_logic.h"
 #include "overlay.h"
 #include "snap.h"
 
@@ -45,6 +47,8 @@ volatile LONG g_typingTarget = 0;   // 0 = None, 1 = Overlay
 volatile LONG g_keyMode = 0;        // 0 = Mirror, 1 = Exclusive
 volatile LONG g_shieldEnabled = 0;  // 1 = on
 volatile LONG g_guardActive = 0;    // 1 = ghost writer typing guard
+volatile LONG g_locked = 0;         // 1 = Alt+K lock: every hotkey except the unlock chord is off
+volatile LONG g_killPending = 0;    // 1 = kill confirmation is on screen
 
 int64_t DedupeUs(Id id) {
     switch (id) {
@@ -91,6 +95,16 @@ const char* Describe(Id id) {
             return "Alt+Mode -> Cycling key mode";
         case Id::GhostWrite:
             return "Alt+W -> Ghost Write";
+        case Id::Lock:
+            return "Alt+K -> Locked (hidden, hotkeys disabled)";
+        case Id::Unlock:
+            return "Alt+K+X -> Unlocked";
+        case Id::KillPrompt:
+            return "Alt+Shift+K -> Kill confirmation";
+        case Id::KillConfirm:
+            return "Enter -> Kill confirmed";
+        case Id::KillCancel:
+            return "Esc -> Kill cancelled";
         default:
             return "?";
     }
@@ -168,6 +182,38 @@ LRESULT CALLBACK LowLevelKeyboardProc(int code, WPARAM wp, LPARAM lp) {
     Id id = Match(vk);
     input_logic::Context context;
     context.hotkey = id != Id::None && (mods == 1 || ((kb->flags & LLKHF_ALTDOWN) && !(mods & 14)));
+    const bool locked = InterlockedCompareExchange(&g_locked, 0, 0) != 0;
+    if (locked) context.hotkey = false;  // locked: every normal hotkey is off
+    lock_logic::State lockState;
+    lockState.locked = locked;
+    lockState.killPending = InterlockedCompareExchange(&g_killPending, 0, 0) != 0;
+    const lock_logic::Action lockAction = lock_logic::Evaluate(
+        vk, down, wasDown, mods, g_physicalDown['K'], g_physicalDown['X'], lockState);
+    if (lockAction != lock_logic::Action::None) {
+        switch (lockAction) {
+            case lock_logic::Action::Lock:
+                id = Id::Lock;
+                InterlockedExchange(&g_locked, 1);
+                break;
+            case lock_logic::Action::Unlock:
+                id = Id::Unlock;
+                InterlockedExchange(&g_locked, 0);
+                break;
+            case lock_logic::Action::KillPrompt:
+                id = Id::KillPrompt;
+                InterlockedExchange(&g_killPending, 1);
+                break;
+            case lock_logic::Action::KillConfirm:
+                id = Id::KillConfirm;
+                InterlockedExchange(&g_killPending, 0);
+                break;
+            default:
+                id = Id::KillCancel;
+                InterlockedExchange(&g_killPending, 0);
+                break;
+        }
+        context.hotkey = true;  // swallow the key (and its release) so no other app sees it
+    }
     context.guard = InterlockedCompareExchange(&g_guardActive, 0, 0) != 0;
     context.target = InterlockedCompareExchange(&g_typingTarget, 0, 0) != 0;
     context.exclusive = InterlockedCompareExchange(&g_keyMode, 0, 0) != 0;
@@ -279,6 +325,10 @@ void SetClipboardShield(bool enabled) { InterlockedExchange(&g_shieldEnabled, en
 void SetTypingGuard(bool active) { InterlockedExchange(&g_guardActive, active ? 1 : 0); }
 
 bool IsHookInstalled() { return InterlockedCompareExchange(&g_installed, 0, 0) != 0; }
+
+bool IsLocked() { return InterlockedCompareExchange(&g_locked, 0, 0) != 0; }
+
+void SetKillPending(bool pending) { InterlockedExchange(&g_killPending, pending ? 1 : 0); }
 
 bool CapsLockOn() { return InterlockedCompareExchange(&g_capsLock, 0, 0) != 0; }
 
@@ -414,6 +464,23 @@ void Dispatch(Id id) {
             break;
         case Id::GhostWrite:
             ghost::Run();
+            break;
+        case Id::Lock:
+            input::ReleaseGrab();
+            overlay::Hide();
+            break;
+        case Id::Unlock:
+            overlay::Show();
+            overlay::ShowToast("Unlocked");
+            break;
+        case Id::KillPrompt:
+            killswitch::ShowPrompt();
+            break;
+        case Id::KillConfirm:
+            killswitch::Confirm();
+            break;
+        case Id::KillCancel:
+            killswitch::Dismiss();
             break;
         default:
             break;

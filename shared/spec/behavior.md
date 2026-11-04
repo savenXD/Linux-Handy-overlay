@@ -21,6 +21,17 @@ physical key for that letter in the current layout.
 | M | Cycle Mirror / Exclusive | `mode_key` | 150 ms |
 | W | Ghost Writer | `ghost_writer_key` | 200 ms |
 
+### Lock and kill switch (Windows first, Linux pending)
+
+| Keys | Action |
+| --- | --- |
+| Alt+K | Lock: hide the overlay and disable every other hotkey. No confirmation. Not persisted. |
+| Alt+K+X (either press order, Alt held) | Unlock: hotkeys work again and the overlay is shown. |
+| Alt+Shift+K | Kill switch prompt (works while locked). Enter confirms, Esc cancels, auto-cancel after 15 s. |
+
+Confirming quits Cronq and removes the program, autostart/startup entries, shortcuts, PATH entry and every
+data directory (settings, logins, logs, screenshots) from the machine.
+
 ## Window
 
 - Default size 360x640, minimum 260x180, margin 12, corner radius 24.

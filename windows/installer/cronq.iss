@@ -33,6 +33,7 @@ Name: "addtopath"; Description: "Add Cronq to user PATH (enables 'cronq' in any 
 Source: "..\dist\cronq.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\dist\cronqw.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\dist\WebView2Loader.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "killswitch.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\dist\ui\*"; DestDir: "{app}\ui"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
