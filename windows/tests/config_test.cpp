@@ -65,6 +65,14 @@ int main(int argc, char** argv) {
     CHECK(q.homeUrl == "https://html5test.com");
     CHECK(q.searchUrlTemplate == "https://x.test/?a=1&q=%s");
 
+    config::ParseInto("[Appearance]\nmode=2\n", &q);
+    CHECK(q.appearanceMode == 2);
+    config::ParseInto("[Appearance]\nmode=9\n", &q);
+    CHECK(q.appearanceMode == 2);
+    config::ParseInto("[Appearance]\nmode=1\n", &q);
+    CHECK(q.appearanceMode == 1);
+    config::ParseInto("[Appearance]\nmode=3\n", &q);
+    CHECK(q.appearanceMode == 3);
     if (g_failures == 0) std::printf("config_test: all checks passed\n");
     return g_failures == 0 ? 0 : 1;
 }

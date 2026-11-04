@@ -44,13 +44,25 @@
       if (!target) return;
       const r = target.getBoundingClientRect(), d = window.devicePixelRatio;
       // DECISION: reserve the toast row while visible; windowed content otherwise covers HTML.
-      const bottom = $('toast').classList.contains('visible') ? Math.min(r.bottom, $('toast').getBoundingClientRect().top - 6) : r.bottom;
+      const bottom = state.appearance < 2 && $('toast').classList.contains('visible') ? Math.min(r.bottom, $('toast').getBoundingClientRect().top - 6) : r.bottom;
       post('slot', {app: state.app, popup: state.popup, x: Math.round(r.x*d), y: Math.round(r.y*d), w: Math.round(r.width*d), h: Math.max(0,Math.round((bottom-r.top)*d))});
     });
   }
   function apply(next) {
     const old = state;
     state = next;
+    if (state.palette) {
+      const root = document.documentElement;
+      root.dataset.appearance = String(state.appearance >= 2 ? 2 : state.appearance);
+      root.style.colorScheme = state.palette.light ? 'light' : 'dark';
+      for (const key of ['background','surface','raised','text','muted','border']) {
+        root.style.setProperty(`--theme-${key}`, state.palette[key]);
+      }
+      const name = ['Dark','Light','Camo Light','Camo Dark'][state.appearance] || 'Camo Light';
+      $('appearance').textContent = name;
+      $('appearance').title = `Appearance: ${name}. Alt+C toggles camouflage; Alt+T switches Light/Dark`;
+      $('appearance').setAttribute('aria-label', $('appearance').title);
+    }
     for (const app of ['home','browser','chatgpt','ghost']) $(app).hidden = app !== state.app;
     $('mode').className = `nav-pill ${state.mode === 'exclusive' ? 'pill-excl' : 'pill-mirror'}`;
     $('mode').title = state.mode === 'exclusive' ? 'Exclusive (click for Mirror)' : 'Mirror (click for Exclusive)';
@@ -105,7 +117,11 @@
       updateEditor();
     }
   });
-  for (const b of document.querySelectorAll('[data-app]')) b.addEventListener('click', () => post('nav', {app: b.dataset.app}));
+  for (const b of document.querySelectorAll('[data-app]')) {
+    b.setAttribute('aria-label', b.textContent.trim());
+    b.addEventListener('click', () => post('nav', {app: b.dataset.app}));
+  }
+  $('appearance').addEventListener('click', () => post('appearance', {mode: ((state.appearance || 0) + 1) % 3}));
   for (const b of document.querySelectorAll('[data-action]')) b.addEventListener('click', () => post(b.dataset.action));
   for (const b of document.querySelectorAll('[data-pill]')) b.addEventListener('click', () => post('pill', {which: b.dataset.pill}));
   for (const b of document.querySelectorAll('[data-window]')) b.addEventListener('click', () => post('window', {action: b.dataset.window}));

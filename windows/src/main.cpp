@@ -16,6 +16,7 @@
 #include "snap.h"
 #include "version.h"
 #include "crash_handler.h"
+#include "theme.h"
 
 #include <shellapi.h>
 
@@ -177,6 +178,7 @@ int RunDaemon(bool forceVisible) {
         return 1;
     }
     focus_guard::Init(overlay::Hwnd());
+    theme::Init();
     browser::Init(overlay::Hwnd());
     SetConsoleCtrlHandler(ConsoleCtrlHandler, TRUE);
 
@@ -193,6 +195,7 @@ int RunDaemon(bool forceVisible) {
     }
 
     Log("MAIN", "Shutdown: performing clean teardown...");
+    theme::Cleanup();
     ghost::Cleanup();
     snap::Cleanup();
     input::Cleanup();

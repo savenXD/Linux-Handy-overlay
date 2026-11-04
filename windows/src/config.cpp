@@ -4,6 +4,8 @@
 #include <cstdlib>
 #include <cstring>
 #include <map>
+#include <fstream>
+#include "ini_writer.h"
 
 namespace cronq {
 namespace config {
@@ -184,6 +186,7 @@ void ParseInto(const std::string& text, AppConfig* cfg) {
     }
 
     // [Browser]
+    if (GetInt(ini, "Appearance", "mode", &i) && i >= 0 && i <= 3) cfg->appearanceMode = i;
     if (GetStr(ini, "Browser", "home_url", &s)) cfg->homeUrl = s;
     if (GetStr(ini, "Browser", "search_url_template", &s)) cfg->searchUrlTemplate = s;
     if (GetStr(ini, "Browser", "user_agent", &s)) cfg->userAgent = s;
@@ -244,7 +247,33 @@ bool Reload() {
 }
 
 const AppConfig& Get() { return g_cfg; }
+bool SetAppearanceMode(int mode) {
+    if (mode < 0 || mode > 3 || g_path.empty()) return false;
+    std::string content;
+    if (!ReadFileText(g_path, &content)) return false;
+    ini_writer::SetIniInt(content,"Appearance","mode",mode);
+    auto temp = g_path + L".appearance.tmp";
+    std::ofstream out(temp.c_str(),std::ios::binary|std::ios::trunc);
+    out.write(content.data(),static_cast<std::streamsize>(content.size())); out.close();
+    if (!out || !MoveFileExW(temp.c_str(),g_path.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH)) {
+        DeleteFileW(temp.c_str()); return false;
+    }
+    g_cfg.appearanceMode=mode; return true;
+}
 std::wstring Path() { return g_path; }
+bool SetCorner(const std::string& corner) {
+    if ((corner!="bottom-left" && corner!="bottom-right") || g_path.empty()) return false;
+    std::string content;
+    if (!ReadFileText(g_path,&content)) return false;
+    if (!ini_writer::SetIniString(content,"General","corner",corner)) return false;
+    const auto temp=g_path+L".corner.tmp";
+    std::ofstream out(temp.c_str(),std::ios::binary|std::ios::trunc);
+    out.write(content.data(),static_cast<std::streamsize>(content.size()));out.close();
+    if (!out || !MoveFileExW(temp.c_str(),g_path.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH)) {
+        DeleteFileW(temp.c_str());return false;
+    }
+    g_cfg.corner=corner;return true;
+}
 
 }  // namespace config
 }  // namespace cronq

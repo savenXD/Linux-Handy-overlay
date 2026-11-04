@@ -15,6 +15,7 @@ struct AppConfig {
     std::string monitor = "primary";     // "primary" or a monitor index
     double opacity = 1.0;                // 0.1 .. 1.0
     bool startVisible = false;
+    int appearanceMode = 2;              // 0 dark, 1 light, 2 transparent black text (default), 3 transparent white text
     KeyMode defaultKeyMode = KeyMode::Mirror;
 
     std::string homeUrl = "https://html5test.com";
@@ -49,6 +50,8 @@ namespace config {
 
 bool Init();                 // creates a default config.ini on first run, then loads it
 bool Reload();               // re-reads config.ini; false if the file could not be read
+bool SetAppearanceMode(int mode); // persists the Windows appearance preference atomically
+bool SetCorner(const std::string& corner);
 const AppConfig& Get();
 std::wstring Path();         // %APPDATA%\cronq\config.ini
 

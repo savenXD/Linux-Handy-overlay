@@ -22,6 +22,8 @@ static WORD VkFor(const std::string& name) {
     if (name == "alt") return VK_MENU;
     if (name == "ctrl") return VK_CONTROL;
     if (name == "shift") return VK_SHIFT;
+    if (name == "left") return VK_LEFT;
+    if (name == "right") return VK_RIGHT;
     if (name.size() == 1) return (WORD)toupper((unsigned char)name[0]);
     return 0;
 }

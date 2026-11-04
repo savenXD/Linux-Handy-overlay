@@ -78,8 +78,12 @@ std::vector<LineInfo> SplitLines(const std::string& text) {
 }  // namespace
 
 bool SetIniInt(std::string& text, const char* section, const char* key, int value) {
+    return SetIniString(text,section,key,std::to_string(value));
+}
+bool SetIniString(std::string& text, const char* section, const char* key, const std::string& value) {
+    if (value.find_first_of("\r\n")!=std::string::npos) return false;
     std::string eol = (text.find("\r\n") != std::string::npos) ? "\r\n" : "\n";
-    std::string valStr = std::to_string(value);
+    std::string valStr = value;
     std::string targetSec = section ? section : "";
     std::string targetKey = key ? key : "";
 

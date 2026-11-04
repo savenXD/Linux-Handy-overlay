@@ -9,6 +9,7 @@
 #include "lock_logic.h"
 #include "overlay.h"
 #include "snap.h"
+#include "theme.h"
 
 namespace cronq {
 namespace hotkey {
@@ -70,6 +71,11 @@ int64_t DedupeUs(Id id) {
             return 150000;
         case Id::GhostWrite:
             return 200000;
+        case Id::Camouflage:
+        case Id::Tone:
+        case Id::DockLeft:
+        case Id::DockRight:
+            return 200000;
         default:
             return 0;
     }
@@ -95,6 +101,14 @@ const char* Describe(Id id) {
             return "Alt+Mode -> Cycling key mode";
         case Id::GhostWrite:
             return "Alt+W -> Ghost Write";
+        case Id::Camouflage:
+            return "Alt+C -> Toggle camouflage";
+        case Id::Tone:
+            return "Alt+T -> Toggle Light/Dark";
+        case Id::DockLeft:
+            return "Alt+Left -> Bottom-left corner";
+        case Id::DockRight:
+            return "Alt+Right -> Bottom-right corner";
         case Id::Lock:
             return "Alt+K -> Locked (hidden, hotkeys disabled)";
         case Id::Unlock:
@@ -179,11 +193,15 @@ LRESULT CALLBACK LowLevelKeyboardProc(int code, WPARAM wp, LPARAM lp) {
     if (down && !wasDown && vk == VK_CAPITAL) InterlockedXor(&g_capsLock, 1);
     if (down && !wasDown && vk == VK_NUMLOCK) InterlockedXor(&g_numLock, 1);
     const unsigned mods = Modifiers();
-    Id id = Match(vk);
+    Id id = vk == 'C' ? Id::Camouflage : vk == 'T' ? Id::Tone :
+            vk == VK_LEFT ? Id::DockLeft : vk == VK_RIGHT ? Id::DockRight : Match(vk);
     input_logic::Context context;
     context.hotkey = id != Id::None && (mods == 1 || ((kb->flags & LLKHF_ALTDOWN) && !(mods & 14)));
     const bool locked = InterlockedCompareExchange(&g_locked, 0, 0) != 0;
-    if (locked) context.hotkey = false;  // locked: every normal hotkey is off
+    if (locked) {
+        context.hotkey = false;  // locked: every normal hotkey is off
+        id = Id::None;  // Swallowed chord keys must never dispatch their normal action.
+    }
     lock_logic::State lockState;
     lockState.locked = locked;
     lockState.killPending = InterlockedCompareExchange(&g_killPending, 0, 0) != 0;
@@ -231,7 +249,7 @@ LRESULT CALLBACK LowLevelKeyboardProc(int code, WPARAM wp, LPARAM lp) {
                     (static_cast<LPARAM>(kb->scanCode & 255) << 16) |
                     ((kb->flags & LLKHF_EXTENDED) ? (1 << 24) : 0) | (route.repeat ? (1 << 25) : 0);
     if (up && (vk == VK_MENU || vk == VK_LMENU || vk == VK_RMENU)) g_suppressorSent = false;
-    if (route.hotkey) {
+    if (route.hotkey && !((id==Id::Camouflage || id==Id::Tone || id==Id::DockLeft || id==Id::DockRight) && wasDown)) {
         PostMessageW(g_target, WM_CRONQ_HOTKEY, static_cast<WPARAM>(id), 0);
         if (!g_suppressorSent) {
             g_suppressorSent = true;
@@ -430,6 +448,8 @@ void InjectAltSuppressor() {
 
 void Dispatch(Id id) {
     if (id <= Id::None || id >= Id::Count) return;
+    // A normal shortcut may already be queued when the hook enters the locked state.
+    if (IsLocked() && id >= Id::Toggle && id <= Id::DockRight) return;
     int64_t now = NowUs();
     if (now - g_lastTriggerUs[(int)id] < DedupeUs(id)) {
         Log("HOTKEY", "Deduped %s (<%lld ms since last trigger)", Describe(id),
@@ -469,7 +489,18 @@ void Dispatch(Id id) {
         case Id::GhostWrite:
             ghost::Run();
             break;
+        case Id::Camouflage:
+            if (!theme::ToggleCamouflage()) overlay::ShowToast("Could not save appearance");
+            break;
+        case Id::Tone:
+            if (!theme::ToggleTone()) overlay::ShowToast("Could not save appearance");
+            break;
+        case Id::DockLeft:
+        case Id::DockRight:
+            overlay::DockBottom(id==Id::DockRight);
+            break;
         case Id::Lock:
+            ghost::Cancel();
             input::ReleaseGrab();
             overlay::Hide();
             break;

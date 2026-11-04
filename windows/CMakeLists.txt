@@ -10,6 +10,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Version configuration from windows/VERSION
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION")
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" CRONQ_VERSION)
 string(STRIP "${CRONQ_VERSION}" CRONQ_VERSION)
 configure_file(
@@ -30,6 +31,8 @@ set(CORE_SOURCES
     src/input.cpp
     src/input_logic.cpp
     src/lock_logic.cpp
+    src/theme.cpp
+    src/theme_logic.cpp
     src/killswitch.cpp
     src/image_logic.cpp
     src/image_codec.cpp
@@ -98,6 +101,14 @@ if(CRONQ_WEBVIEW2)
     add_executable(webview2_compile_check tests/webview2_compile_check.cpp)
     target_link_libraries(webview2_compile_check PRIVATE cronq_core)
     add_executable(browser_runtime_test tests/browser_runtime_test.cpp)
+    add_executable(theme_runtime_test tests/theme_runtime_test.cpp)
+    target_link_libraries(theme_runtime_test PRIVATE cronq_core)
+    add_dependencies(theme_runtime_test cronq_ui)
+    if(MSVC)
+        target_compile_options(theme_runtime_test PRIVATE /utf-8)
+    else()
+        target_link_options(theme_runtime_test PRIVATE -static)
+    endif()
     target_link_libraries(browser_runtime_test PRIVATE cronq_core shlwapi)
     if(MSVC)
         target_compile_options(browser_runtime_test PRIVATE /utf-8)
@@ -164,7 +175,7 @@ if(CMAKE_CROSSCOMPILING AND NOT CMAKE_HOST_WIN32)
 endif()
 add_test(NAME config_parser COMMAND config_test "${CRONQ_FIXTURE}")
 
-foreach(t browser_logic_test jsonlite_test log_rotate_test geometry_test ghost_logic_test snap_logic_test ini_writer_test key_translate_test input_logic_test lock_logic_test image_logic_test image_codec_test crash_report_test)
+foreach(t browser_logic_test jsonlite_test log_rotate_test geometry_test ghost_logic_test snap_logic_test ini_writer_test key_translate_test input_logic_test lock_logic_test theme_logic_test image_logic_test image_codec_test crash_report_test)
     add_executable(${t} tests/${t}.cpp)
     target_link_libraries(${t} PRIVATE cronq_core)
     if(MSVC)
@@ -187,7 +198,7 @@ add_test(NAME parity_config
 
 # MinGW / llvm-mingw: link every executable statically so there are no libc++/libgcc DLLs to ship or lose.
 if(NOT MSVC)
-    foreach(t cronq cronqw sendkeys config_test browser_logic_test jsonlite_test log_rotate_test geometry_test parity_config_test ghost_logic_test snap_logic_test ini_writer_test key_translate_test input_logic_test lock_logic_test image_logic_test image_codec_test crash_report_test)
+    foreach(t cronq cronqw sendkeys config_test browser_logic_test jsonlite_test log_rotate_test geometry_test parity_config_test ghost_logic_test snap_logic_test ini_writer_test key_translate_test input_logic_test lock_logic_test theme_logic_test image_logic_test image_codec_test crash_report_test)
         target_link_options(${t} PRIVATE -static)
     endforeach()
 endif()

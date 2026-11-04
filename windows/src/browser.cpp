@@ -15,6 +15,7 @@
 #include "image_logic.h"
 #include "image_codec.h"
 #include "ui_bridge.h"
+#include "theme.h"
 #include <fstream>
 #include <sstream>
 #ifdef CRONQ_WEBVIEW2
@@ -225,6 +226,7 @@ bool ConfigureView(int i) {
         BOOL success = FALSE;
         Check(a->get_IsSuccess(&success), "navigation get_IsSuccess");
         g.views[i].loading = false;
+        RefreshAppearance();
         if (!success) {
             COREWEBVIEW2_WEB_ERROR_STATUS status{};
             Check(a->get_WebErrorStatus(&status), "get_WebErrorStatus");
@@ -310,6 +312,15 @@ bool ConfigureView(int i) {
     return ok;
 }
 
+LRESULT CALLBACK ViewHostProc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
+    if (msg==WM_ERASEBKGND) {
+        RECT r; GetClientRect(hwnd,&r);
+        auto bg=theme::Get().background;
+        HBRUSH brush=CreateSolidBrush(RGB(bg.r,bg.g,bg.b));
+        FillRect(reinterpret_cast<HDC>(wp),&r,brush);DeleteObject(brush);return 1;
+    }
+    return DefWindowProcW(hwnd,msg,wp,lp);
+}
 void CreateView(int i) {
     if (g_shuttingDown || !g.environment || g.views[i].creating || g.views[i].controller) return;
     auto& v = g.views[i];
@@ -318,7 +329,9 @@ void CreateView(int i) {
     // Give each controller its own native host. Sibling WebView2 controllers
     // sharing one parent can reorder their internal child HWNDs when resized,
     // leaving the full-window black UI surface above the remote page.
-    v.host = CreateWindowExW(WS_EX_NOACTIVATE, L"STATIC", L"", WS_CHILD | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
+    WNDCLASSW hostClass{};hostClass.hInstance=GetModuleHandleW(nullptr);hostClass.lpszClassName=L"CronqWebViewHost";hostClass.lpfnWndProc=ViewHostProc;
+    RegisterClassW(&hostClass);
+    v.host = CreateWindowExW(WS_EX_NOACTIVATE, L"CronqWebViewHost", L"", WS_CHILD | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
                              0, 0, 1, 1, g_parent, nullptr, GetModuleHandleW(nullptr), nullptr);
     if (!v.host) { Fail("Create view host", HRESULT_FROM_WIN32(GetLastError())); return; }
     Log("BROWSER", "Creating controller view=%d generation=%u", i, gen);
@@ -345,6 +358,7 @@ void CreateView(int i) {
             return S_OK;
         }
         Log("BROWSER", "Controller created view=%d", i);
+        RefreshAppearance();
         ResizeHost();
         if (i == kPopup) {
             auto pending = g.popup;
@@ -367,7 +381,7 @@ void CreateView(int i) {
                 return S_OK;
             });
             hr = view.core->AddScriptToExecuteOnDocumentCreated(
-                Widen(browser_logic::ChatGptUserScript()).c_str(), scriptDone.Get());
+                Widen(browser_logic::ChatGptUserScript() + ";" + theme::WebScript()).c_str(), scriptDone.Get());
             if (!Check(hr, "AddScriptToExecuteOnDocumentCreated")) {
                 view.scriptReady = true;
                 Navigate(view, view.pending.empty() ? "https://chatgpt.com" : view.pending);
@@ -413,6 +427,25 @@ void UpdateLayout() {
 #endif
 }  // namespace
 
+void RefreshAppearance() {
+#ifdef CRONQ_WEBVIEW2
+    const auto& p=theme::Get();
+    for (int i=0; i<4; ++i) {
+        auto& v=g.views[i];
+        if (!v.core || !v.controller) continue;
+        ComPtr<ICoreWebView2Controller2> background;
+        auto bg=p.background;
+        if (SUCCEEDED(v.controller.As(&background)))
+            background->put_DefaultBackgroundColor({static_cast<BYTE>(theme::IsCamouflage() ? 0 : 255),static_cast<BYTE>(bg.r),static_cast<BYTE>(bg.g),static_cast<BYTE>(bg.b)});
+        InvalidateRect(v.host,nullptr,TRUE);
+        ComPtr<ICoreWebView2_13> core13;
+        ComPtr<ICoreWebView2Profile> profile;
+        if (SUCCEEDED(v.core.As(&core13)) && SUCCEEDED(core13->get_Profile(profile.ReleaseAndGetAddressOf())))
+            Check(profile->put_PreferredColorScheme(p.light ? COREWEBVIEW2_PREFERRED_COLOR_SCHEME_LIGHT : COREWEBVIEW2_PREFERRED_COLOR_SCHEME_DARK), "profile color scheme");
+        if (i==kChat) Check(v.core->ExecuteScript(Widen(theme::WebScript()).c_str(),nullptr),"ChatGPT appearance");
+    }
+#endif
+}
 bool Init(HWND parent) {
     g_parent = parent;
     g_shuttingDown = false;

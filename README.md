@@ -30,9 +30,25 @@ git clone https://github.com/savenXD/Linux-Handy-overlay.git cronq && cd cronq &
 Then run `cronq` (or find **Cronq** in your app menu). Remove it later with `./uninstall.sh`.
 
 ### 🪟 Windows 10/11 (64-bit) — PowerShell
-> ⚠️ The Windows port is **beta**: it passes cross-build/Wine tests but hasn't been fully verified on real Windows yet. See [windows/PARITY.md](windows/PARITY.md).
+**Windows v1.0.0** is the current release. [Download the Windows installer](https://github.com/savenXD/Linux-Handy-overlay/releases/latest/download/cronq-setup.exe), read the [release notes](windows/v1.0.0.md), or see [Windows usage and verification details](windows/README.md).
 
-#### Option A — Download the installer (.exe) — recommended, no dependencies
+New in v1.0.0: Light/Dark themes, transparent text-only camouflage, reliable temporary locking,
+and saved bottom-corner shortcuts. Fresh installations default to black text on a transparent background.
+
+| Windows shortcut | Action |
+| --- | --- |
+| **Alt+C** | Toggle transparent camouflage and normal controls |
+| **Alt+T** | Switch black/white text, keeping camouflage on/off |
+| **Alt+Left / Alt+Right** | Move to the bottom-left/right corner and remember it |
+| **Alt+K** | Hide and temporarily lock Cronq |
+| **Alt+K+X** | Unlock and show Cronq |
+| **Alt+Shift+K** | Open the full removal prompt; Enter confirms, Esc cancels |
+
+The minimal download page is in [`frontend/`](frontend/). For a local preview, run
+`python -m http.server 5174 --bind 127.0.0.1 --directory frontend` and open
+`http://127.0.0.1:5174/`. The button downloads the latest published `cronq-setup.exe`.
+
+#### Option A — Download the installer (.exe) — recommended, no build tools
 No Git, CMake, Visual Studio or admin rights needed. Pick either way:
 
 **1. Click-to-download**

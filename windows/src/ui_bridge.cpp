@@ -12,6 +12,7 @@
 #include "jsonlite.h"
 #include "overlay.h"
 #include "snap.h"
+#include "theme.h"
 namespace cronq {
 namespace ui {
 namespace {
@@ -52,6 +53,7 @@ void PushState() {
                                                                 : "none")
       << "\",\"app\":\"" << json::Escape(overlay::CurrentApp()) << "\",\"opacity\":" << overlay::GetOpacity()
       << ",\"width\":" << w << ",\"height\":" << h
+      << ",\"appearance\":" << theme::Mode() << ",\"palette\":" << theme::PaletteJson()
       << ",\"canBack\":" << (browser::CanGoBack() ? "true" : "false")
       << ",\"loading\":" << (browser::IsLoading() ? "true" : "false")
       << ",\"progress\":" << browser::Progress() << ",\"url\":\"" << json::Escape(browser::CurrentUri())
@@ -82,7 +84,13 @@ void OnMessage(const std::string& text) {
         return;
     }
     if (!g_ready) return;
-    if (type == "slot") {
+    if (type == "appearance") {
+        int mode;
+        if (Number(m,"mode",&mode) && mode <= 3) {
+            if (!theme::SetMode(mode)) overlay::ShowToast("Could not save appearance");
+            PushState();
+        }
+    } else if (type == "slot") {
         // Ignore a late rectangle from the page that was just switched away from.
         if (m["app"] != overlay::CurrentApp() || (m["popup"] == "true") != browser::HasPopup()) return;
         int x, y, w, h;

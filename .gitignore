@@ -4,3 +4,4 @@ bin/
 
 # Windows build output
 windows/build*/
+windows/dist/

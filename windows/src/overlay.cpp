@@ -11,6 +11,7 @@
 #include "input.h"
 #include "raise.h"
 #include "snap.h"
+#include "theme.h"
 
 #include <wtsapi32.h>
 #include <cstdio>
@@ -137,7 +138,7 @@ void UpdateRegion() {
     if (!g_hwnd) return;
     RECT rc;
     GetClientRect(g_hwnd, &rc);
-    int r = S(kCornerRadius);
+    int r = theme::IsCamouflage() ? 0 : S(kCornerRadius);
     HRGN rgn = CreateRoundRectRgn(0, 0, rc.right + 1, rc.bottom + 1, r * 2, r * 2);
     SetWindowRgn(g_hwnd, rgn, TRUE);  // the window owns rgn from here on
 }
@@ -154,7 +155,10 @@ void ApplyAlpha() {
     int a = (int)(g_opacity * 255.0 + 0.5);
     if (a < 1) a = 1;
     if (a > 255) a = 255;
-    SetLayeredWindowAttributes(g_hwnd, 0, (BYTE)a, LWA_ALPHA);
+    // The minimal Light canvas is keyed out; opacity still applies to its text.
+    auto bg=theme::Get().background;
+    SetLayeredWindowAttributes(g_hwnd, RGB(bg.r,bg.g,bg.b), (BYTE)a,
+                               LWA_ALPHA | (theme::IsCamouflage() ? LWA_COLORKEY : 0));
 }
 
 void MoveTo(int x, int y) {
@@ -330,6 +334,12 @@ void DrawPill(HDC dc, HFONT font, const RECT& r, const wchar_t* label, COLORREF 
 }
 
 void Paint(HDC wndDc) {
+    if (theme::IsCamouflage()) {
+        RECT rc; GetClientRect(g_hwnd,&rc);
+        auto bg=theme::Get().background;
+        HBRUSH key=CreateSolidBrush(RGB(bg.r,bg.g,bg.b)); FillRect(wndDc,&rc,key); DeleteObject(key);
+        return;
+    }
     if (browser::IsUiVisible()) return;
     RECT rc;
     GetClientRect(g_hwnd, &rc);
@@ -342,6 +352,10 @@ void Paint(HDC wndDc) {
     SetBkMode(dc, TRANSPARENT);
 
     // Background + header
+    const auto& palette=theme::Get();
+    auto color=[](theme_logic::Color c) { return RGB(c.r,c.g,c.b); };
+    kBg=color(palette.background); kHeaderBg=color(palette.surface);
+    kText=color(palette.text); kMuted=color(palette.muted);
     HBRUSH bg = CreateSolidBrush(kBg);
     FillRect(dc, &rc, bg);
     DeleteObject(bg);
@@ -843,6 +857,7 @@ void Cleanup() {
 }
 
 HWND Hwnd() { return g_hwnd; }
+void RefreshAppearance() { ApplyAlpha(); UpdateRegion(); QueueDraw(); }
 
 void Show() {
     if (!g_hwnd) return;
@@ -883,6 +898,24 @@ void Reposition() {
     ApplyGeometry();
     QueueDraw();
     Log("WINDOW", "Overlay repositioned to (%d, %d)", g_x, g_y);
+}
+
+void DockBottom(bool right) {
+    if (!g_hwnd) return;
+    const std::string corner=right ? "bottom-right" : "bottom-left";
+    const bool saved=config::SetCorner(corner);
+    if (g_maximized) {
+        g_w=g_prevW>0 ? g_prevW : S(kWidth);
+        g_h=g_prevH>0 ? g_prevH : S(kHeight);
+        g_maximized=false;
+    }
+    Mon mon=ConfiguredMonitor();g_dpi=MonitorDpi(mon.handle);
+    geometry::CalcCorner({mon.work.left,mon.work.top,mon.work.right,mon.work.bottom},
+                         g_w,g_h,S(config::Get().margin),corner,&g_x,&g_y);
+    g_userMoved=!saved;
+    ApplyGeometry();QueueDraw();
+    if (!saved) ShowToast("Moved; could not save corner");
+    Log("WINDOW","Docked %s at (%d,%d), saved=%d",corner.c_str(),g_x,g_y,saved);
 }
 
 void ApplyConfig() {

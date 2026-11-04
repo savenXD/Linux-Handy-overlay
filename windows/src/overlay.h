@@ -23,6 +23,7 @@ void Toggle();
 bool IsVisible();
 
 void Reposition();
+void DockBottom(bool right); // instant bottom corner on the configured display, saved for the next launch
 void ApplyConfig();
 void SetOpacity(double opacity);  // clamps to 0.20 .. 1.00 and shows the "Opacity: N%" toast
 double GetOpacity();
@@ -33,6 +34,7 @@ void GetGeometry(int* x, int* y, int* w, int* h);
 
 void SetGhost(bool ghost);        // WS_EX_TRANSPARENT on/off
 void QueueDraw();
+void RefreshAppearance();
 void ShowToast(const std::string& msg);
 
 double Scale();

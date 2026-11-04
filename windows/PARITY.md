@@ -1,5 +1,23 @@
 # Windows parity and verification
 
+## v1.0.0 native Windows update — 2026-11-05
+
+The following checks now have native Windows evidence in addition to the historical audit below:
+
+- `theme_runtime_test`: WebView2 Light/Dark and transparent palettes, page-wrapper background removal,
+  page reloads, configuration persistence, and visible black/white text over two changing desktop underlay colors.
+- `lock_hotkey_runtime_test.ps1`: Alt+K hides and disables normal shortcuts, Alt+X cannot bypass the lock,
+  and both key orders of Alt+K+X restore the overlay.
+- `camouflage_hotkey_runtime_test.ps1`: Alt+C toggles camouflage; Alt+T changes text color without
+  changing transparency; the temporary lock blocks both.
+- `corner_hotkey_runtime_test.ps1`: Alt+Left/Right preserve size and bottom alignment, retain the selected
+  corner through hide/show and configuration reload, and respect temporary locking. A separate installed-app
+  restart check verified that the saved corner is restored.
+
+These checks use an isolated local ChatGPT-style fixture for browser styling. They do not certify live
+ChatGPT OAuth, every third-party page, games, IME/layout combinations, or all multi-monitor configurations.
+The older per-feature statuses below remain the evidence baseline for features outside these checks.
+
 This is the integration audit from 2026-10-22. It supersedes broad verification claims in the individual
 phase reports. Windows uses the Linux implementation as its behavior reference; native Windows acceptance
 is still required before calling the port complete.

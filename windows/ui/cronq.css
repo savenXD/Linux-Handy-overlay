@@ -164,3 +164,53 @@ input[role=switch]:checked::after { left: 20px; }
 .corner-tl { top: 0; left: 0; cursor: nwse-resize; }
 .corner-tr { top: 0; right: 0; cursor: nesw-resize; }
 .corner-bl { bottom: 0; left: 0; cursor: nesw-resize; }
+
+/* One palette drives Dark, Light and sampled Camouflage, including Ghost Typer. */
+:root { color-scheme: dark; --theme-background:#000; --theme-surface:#121212; --theme-raised:#222; --theme-text:#fff; --theme-muted:#a0a0a0; --theme-border:#444; }
+html, body, .phone-root, .status-bar, .header-box, .home-page, .bottom-nav,
+.ghost-page, .test-input-box, .popup-modal-layer { background:var(--theme-background); color:var(--theme-text); border-color:var(--theme-border); }
+.popup-modal-bar, .home-search-bar, .url-bar-container, .test-input-entry { background:var(--theme-surface); color:var(--theme-text); border-color:var(--theme-border); }
+.url-entry, .test-input-entry { color:var(--theme-text); caret-color:var(--theme-text); }
+.app-label, .popup-modal-title { color:var(--theme-text); }
+.home-search-label, .home-section-title, .nav-button span, .nav-button label { color:var(--theme-muted); }
+.nav-button.nav-selected, .nav-button:hover, .app-button:hover, .move-capsule:hover,
+.top-ctrl-btn:hover, .url-action-btn:hover { background:var(--theme-raised); }
+.nav-button.nav-selected span, .nav-button:hover span { color:var(--theme-text); }
+.appearance-button { font-size:10px; padding:4px 6px; color:var(--theme-text); border:1px solid var(--theme-border); border-radius:6px; }
+.appearance-button:hover { background:var(--theme-raised); }
+button:focus-visible, input:focus-visible, textarea:focus-visible { outline:2px solid var(--theme-text); outline-offset:-2px; }
+.url-bar-container:focus-within, .test-input-entry:focus { border-color:var(--theme-text); }
+.load-progress span { background:var(--theme-text); }
+:root .ghost-page .ghost-title, :root .ghost-page textarea { color:var(--theme-text); caret-color:var(--theme-text); }
+:root .ghost-page label, :root .ghost-page .dim-label, :root .ghost-page .section-label,
+:root .ghost-page .eta, :root .ghost-page textarea::placeholder { color:var(--theme-muted); }
+:root .ghost-page .editor-frame, :root .ghost-page button, :root .ghost-page .mode-btn,
+:root .ghost-page .eta { background:var(--theme-surface); color:var(--theme-text); border-color:var(--theme-border); }
+:root .ghost-page button:hover, :root .ghost-page .mode-btn[aria-checked=true] { background:var(--theme-raised); color:var(--theme-text); border-color:var(--theme-text); }
+:root .ghost-page .start-typing { background:var(--theme-text); color:var(--theme-background); border-color:var(--theme-text); }
+:root .ghost-page textarea::selection { background:var(--theme-text); color:var(--theme-background); }
+.toast-box { background:var(--theme-text); }
+.toast-label { color:var(--theme-background); }
+.top-close-btn:hover, .popup-close-btn:hover { background:#dc2626; color:#fff; }
+svg [stroke="#a1a1aa"], svg[stroke="#a1a1aa"], svg[stroke="#71717a"],
+svg[stroke="#737373"], svg[stroke="#e4e4e7"] { stroke:var(--theme-muted); }
+#handle rect { fill:var(--theme-muted); }
+[data-app="chatgpt"] svg > rect, [data-app="ghost"] svg > rect { fill:var(--theme-surface); stroke:var(--theme-border); }
+[data-app="chatgpt"] svg path { fill:var(--theme-text); }
+[data-app="ghost"] svg g { stroke:var(--theme-text); }
+
+/* Camouflage is a content view. Alt+C always restores the normal controls. */
+:root[data-appearance="2"] .phone-root { border:0; border-radius:0; }
+:root[data-appearance="2"] :is(.status-bar,.bottom-nav,.header-box,.popup-modal-bar,
+.home-search-bar,.home-section-title,.app-label,.toast-box) { display:none!important; }
+:root[data-appearance="2"] .content-slot { margin:0; }
+:root[data-appearance="2"] :is(.popup-modal-layer,.home-page,.ghost-page) { border:0; border-radius:0; }
+:root[data-appearance="2"] .home-page { padding:0; justify-content:center; }
+:root[data-appearance="2"] .app-button { padding:10px 6px; border:0; background:transparent; }
+:root[data-appearance="2"] .app-button svg > rect { fill:none; stroke:none; }
+:root[data-appearance="2"] .resize-grip::after { display:none; }
+:root[data-appearance="2"], :root[data-appearance="2"] body,
+:root[data-appearance="2"] :is(.phone-root,.home-page,.web-page,.popup-modal-layer,.ghost-page,.ghost-scroll,.editor-frame),
+:root[data-appearance="2"] .ghost-page :is(textarea,button,.mode-btn,.eta) { background:transparent!important; }
+:root[data-appearance="2"] .ghost-page :is(.editor-frame,textarea,button,.mode-btn,.eta) { border-color:transparent!important; box-shadow:none!important; }
+:root[data-appearance="2"] .ghost-page .start-typing { color:var(--theme-text)!important; }

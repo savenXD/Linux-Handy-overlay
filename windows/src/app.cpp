@@ -10,6 +10,7 @@
 #include "overlay.h"
 #include "snap.h"
 #include "ui_bridge.h"
+#include "theme.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -115,16 +116,18 @@ std::string HandleCommand(const std::string& rawLine) {
         config::Reload();
         overlay::ApplyConfig();
         hotkey::ReloadKeys();
+        theme::Reload();
     } else if (EqNoCase(line, "STATUS")) {
         char buf[256];
-        snprintf(buf, sizeof(buf), "MODE=%s TARGET=%s GHOST=%s GRAB=%s VISIBLE=%s APP=%s\n",
+        snprintf(buf, sizeof(buf), "MODE=%s TARGET=%s GHOST=%s GRAB=%s VISIBLE=%s APP=%s LOCKED=%s APPEARANCE=%d\n",
                  input::GetKeyMode() == KeyMode::Exclusive ? "EXCLUSIVE" : "MIRROR",
                  input::GetTypingTarget() == input::TypingTarget::Overlay ? "OVERLAY" : "NONE",
                  input::GetGhostMode() == input::GhostMode::On ? "GHOST" : "SOLID",
                  input::GetGrabStatus() == input::GrabStatus::Active
                      ? "ACTIVE"
                      : (input::GetGrabStatus() == input::GrabStatus::Failed ? "FAILED" : "NONE"),
-                 overlay::IsVisible() ? "TRUE" : "FALSE", overlay::CurrentApp());
+                 overlay::IsVisible() ? "TRUE" : "FALSE", overlay::CurrentApp(),
+                 hotkey::IsLocked() ? "TRUE" : "FALSE", theme::Mode());
         resp = buf;
     } else {
         resp = "UNKNOWN_COMMAND\n";

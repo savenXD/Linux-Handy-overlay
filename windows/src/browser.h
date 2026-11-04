@@ -3,6 +3,7 @@
 namespace cronq {
 namespace browser {
 void Recover(unsigned index, unsigned generation);
+void RefreshAppearance();
 bool Init(HWND parent);
 void Cleanup();
 bool IsAvailable();

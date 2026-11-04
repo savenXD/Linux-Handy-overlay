@@ -17,6 +17,10 @@ enum class Id : int {
     Snap,         // Alt+P
     Mode,         // Alt+M
     GhostWrite,   // Alt+W
+    Camouflage,   // Alt+C toggles minimal camouflage
+    Tone,         // Alt+T switches Light/Dark without changing transparency
+    DockLeft,     // Alt+Left Arrow: save bottom-left corner
+    DockRight,    // Alt+Right Arrow: save bottom-right corner
     Lock,         // Alt+K (hide + disable every other hotkey)
     Unlock,       // Alt+K+X chord while locked
     KillPrompt,   // Alt+Shift+K

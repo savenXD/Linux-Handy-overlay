@@ -60,6 +60,10 @@ int main() {
     CHECK(exact == "\xEF\xBB\xBF[GhostTiming]\r\n\tspeed\t=\t2   # preserve me  \r\n");
     CHECK(GetIniInt("[s]\nk=12junk\n", "s", "k", 7) == 7);
     CHECK(GetIniInt("[s]\nk=999999999999999999999999\n", "s", "k", 7) == 7);
+    std::string corner="[General]\r\ncorner = bottom-left  # saved position\r\n[Appearance]\r\nmode = 2\r\n";
+    CHECK(SetIniString(corner,"General","corner","bottom-right"));
+    CHECK(corner=="[General]\r\ncorner = bottom-right  # saved position\r\n[Appearance]\r\nmode = 2\r\n");
+    CHECK(!SetIniString(corner,"General","corner","bottom-left\nmode=0"));
     if (g_failures == 0) {
         std::printf("ini_writer_test: all checks passed\n");
     }

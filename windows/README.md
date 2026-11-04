@@ -1,8 +1,15 @@
-# Cronq for Windows
+# Cronq v1.0.0 for Windows
 
 Cronq is a floating companion window shaped like a phone (default 360x640 pixels, rounded corners, dark theme) that stays visible on top of other software—including borderless-fullscreen apps and games—without ever stealing keyboard focus. Inside it: a mobile browser, ChatGPT with persistent login sessions, Ghost Typer for human-like automated typing, clean screen captures (Snap) excluding the overlay, and the ability to type into the overlay without losing focus on whatever app you are using underneath.
 
-The Windows port is a completely native, dedicated C++17 implementation built using Win32 and Microsoft Edge WebView2, intended to match the Linux version. Cross-compilation and Wine checks pass; native WebView2 and Windows desktop acceptance remain required. See [PARITY.md](PARITY.md) for evidence and limits.
+The Windows release is a native C++17 implementation using Win32 and Microsoft Edge WebView2.
+Version 1.0.0 includes Light/Dark themes, transparent camouflage, temporary locking, and saved corner docking.
+Native Windows checks cover transparent text rendering, theme persistence, lock behavior, shortcuts,
+and docking across a restart. ChatGPT styling is tested with a local fixture; live site changes and
+application-specific behavior can still require adjustments. See [release notes](v1.0.0.md) and
+[PARITY.md](PARITY.md) for evidence and limits.
+
+[Download the latest Windows installer](https://github.com/savenXD/Linux-Handy-overlay/releases/latest/download/cronq-setup.exe).
 
 ---
 
@@ -75,6 +82,10 @@ All global shortcuts use the **Alt + key** chord. The focused application does n
 | **Alt+P** | Snap screenshot (saved to `Pictures\cronq` & clipboard) | `snap_key` | `p` |
 | **Alt+M** | Cycle typing mode: Mirror ⇄ Exclusive | `mode_key` | `m` |
 | **Alt+W** | Ghost Writer start / cancel typing | `ghost_writer_key` | `w` |
+| **Alt+C** | Toggle minimal camouflage; press again to restore the previous Light/Dark mode | *fixed* | `c` |
+| **Alt+T** | Switch Light/Dark (black/white text), preserving camouflage on/off | *fixed* | `t` |
+| **Alt+Left Arrow** | Instantly dock bottom-left and save the corner for future launches | *fixed* | Left Arrow |
+| **Alt+Right Arrow** | Instantly dock bottom-right and save the corner for future launches | *fixed* | Right Arrow |
 | **Alt+K** | **Lock**: hide the overlay and disable every other Cronq shortcut. No confirmation. | *fixed* | `k` |
 | **Alt+K+X** | **Unlock** (hold Alt and K, then X, or X then K): shortcuts work again and the overlay reappears | *fixed* | `k`+`x` |
 | **Alt+Shift+K** | **Kill switch**: on-screen prompt; **Enter** confirms, **Esc** (or 15 s of no answer) cancels | *fixed* | `k` |
@@ -91,6 +102,39 @@ Lock state is not saved: restarting Cronq starts unlocked.
 ---
 
 ## Mouse Controls
+
+### Appearance: Dark, Light and Camouflage
+
+Click the **Dark / Light / Camo** button at the top left to cycle appearances. The choice is saved
+in `%APPDATA%\cronq\config.ini` under `[Appearance]`: `mode = 0` (Dark), `1` (Light),
+`2` (transparent with black text, the default), or `3` (transparent with white text).
+This applies to the home screen, controls, Ghost Typer, and ChatGPT inside Cronq. It does not change
+the theme of standalone applications outside Cronq.
+
+Light uses white surfaces and dark text. Camouflage removes the background, showing the window
+underneath with text and icons on top. **Alt+T** changes black text to white text and back while keeping
+the background transparent. Windows color-key transparency removes the Light or Dark canvas.
+White pixels in images (black-text mode), or black pixels (white-text mode), also become transparent.
+Background pixels pass mouse clicks through; click the visible message placeholder to type, or use
+Alt+C to restore normal controls. It does not sample, capture, save, or upload the screen.
+
+In Camouflage, Cronq hides its border, header, footer, search box, labels and window controls. Home
+keeps only clickable app icons. ChatGPT uses a transparent background with black or white conversation text and
+a message field; its sidebar, header, footer, avatars and message action buttons are hidden.
+The message field and send action remain usable. **Alt+C** switches Camouflage on and off, restoring
+the selected Light or Dark appearance with all controls. The normal lock (Alt+K) disables both Alt+C and Alt+T.
+
+ChatGPT receives local appearance overrides, including on navigation.
+These overrides do not change your account's saved appearance preference. Changes to ChatGPT's page
+structure may require updating the style integration. Other embedded websites receive a light/dark
+browser preference; sites with their own fixed colors may not follow it. The text-focused transparent
+appearance is applied to Cronq and its ChatGPT view, not arbitrary third-party page designs.
+
+Validation: `theme_logic_test` checks text contrast over 4,096 sampled RGB colors;
+`theme_runtime_test` uses an isolated WebView2 profile and a local ChatGPT-style fixture to check palette
+application, the appearance button, persistence, page theme changes, reloads, and desktop pixels against
+two changing underlay colors. It also verifies that Light mode restores an opaque background. Run native acceptance
+tests on an interactive Windows desktop with separate `APPDATA` and `LOCALAPPDATA` test folders.
 
 - **Top Drag Handle:** Click and drag to move the overlay anywhere on screen.
 - **Double-Click Drag Handle:** Maximise height (expands overlay from screen top to bottom margin); double-click again to restore previous dimensions.

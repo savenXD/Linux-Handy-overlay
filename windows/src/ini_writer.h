@@ -12,6 +12,7 @@ namespace ini_writer {
 // If the section does not exist, a new section and key are appended at the end.
 // Preserves all comments, whitespace, and line-ending conventions (CRLF or LF).
 bool SetIniInt(std::string& text, const char* section, const char* key, int value);
+bool SetIniString(std::string& text, const char* section, const char* key, const std::string& value);
 
 // Reads an integer key from an INI string under the given section, returning defaultValue if not found.
 int GetIniInt(const std::string& text, const char* section, const char* key, int defaultValue);
