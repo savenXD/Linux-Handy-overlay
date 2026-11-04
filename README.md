@@ -1,71 +1,43 @@
 # 📱 Cronq
 
-> A sleek, floating, non-focus-stealing companion overlay designed for Linux and Windows. It stays visible on top of all windows without ever stealing your typing focus.
+**A tiny phone-shaped window that floats on top of everything — even fullscreen apps — and never steals your typing focus.**
 
-```text
-   +-------------------------------------------------------------+
-   | (● Mirror) (● Ghost)    [ ≡ Drag Move ]        —   ▢   ✕   |  <- Header: Status Pills, Move Handle, Window Controls
-   | [ 🔍 https://duckduckgo.com                               ] |  <- URL / Search Entry
-   |-------------------------------------------------------------|
-   |                                                             |
-   |                     WebKitGTK 4.1 View                      |  <- Embedded Mobile Browser
-   |                   (Android Mobile View)                     |     (ChatGPT, Web Apps, Docs)
-   |                                                             |
-   |   +-----------------------------------------------------+   |
-   |   | 👻 Ghost Typer: [Type text to inject...           ] |   |  <- On-Demand Ghost Input (toggled via bottom nav)
-   |   +-----------------------------------------------------+   |
-   |-------------------------------------------------------------|
-   |      🏠 Home       🌐 Chrome       🤖 ChatGPT       👻 Ghost       🔄 Reset          [⤡] |  <- Bottom Navigation & Resize Grip
-   +-------------------------------------------------------------+
-```
+![Cronq floating over a fullscreen browser](assets/screenshot.png)
+
+*Cronq (bottom-left) open on top of a fullscreen browser page. The page behind it keeps keyboard focus.*
 
 ---
 
-## ⚡ Quick Install
+## 🚀 Install
 
-### 🐧 Linux (X11) — one command
-```bash
-git clone https://github.com/savenXD/Linux-Handy-overlay.git cronq && cd cronq && ./install.sh
-```
-Then run `cronq` (or find **Cronq** in your app menu). Remove it later with `./uninstall.sh`.
+### 🪟 Windows
 
-### 🪟 Windows 10/11 (64-bit) — PowerShell
-**Windows v1.0.0** is the current release. [Download the Windows installer](https://github.com/savenXD/Linux-Handy-overlay/releases/latest/download/cronq-setup.exe), read the [release notes](windows/v1.0.0.md), or see [Windows usage and verification details](windows/README.md).
+**Supported versions**
 
-New in v1.0.0: Light/Dark themes, transparent text-only camouflage, reliable temporary locking,
-and saved bottom-corner shortcuts. Fresh installations default to black text on a transparent background.
+| Windows version | Supported |
+| :--- | :---: |
+| Windows 11 (64-bit) | ✅ |
+| Windows 10 version 2004 (build 19041) or newer, 64-bit | ✅ |
+| Windows 10 older than 2004, Windows 7/8, 32-bit | ❌ |
 
-| Windows shortcut | Action |
-| --- | --- |
-| **Alt+C** | Toggle transparent camouflage and normal controls |
-| **Alt+T** | Switch black/white text, keeping camouflage on/off |
-| **Alt+Left / Alt+Right** | Move to the bottom-left/right corner and remember it |
-| **Alt+K** | Hide and temporarily lock Cronq |
-| **Alt+K+X** | Unlock and show Cronq |
-| **Alt+Shift+K** | Open the full removal prompt; Enter confirms, Esc cancels |
+No admin rights needed. The installer downloads the Microsoft Edge WebView2 runtime for you if it is missing.
 
-The minimal download page is in [`frontend/`](frontend/). For a local preview, run
-`python -m http.server 5174 --bind 127.0.0.1 --directory frontend` and open
-`http://127.0.0.1:5174/`. The button downloads the latest published `cronq-setup.exe`.
-
-#### Option A — Download the installer (.exe) — recommended, no build tools
-No Git, CMake, Visual Studio or admin rights needed. Pick either way:
-
-**1. Click-to-download**
+**How to install**
 1. Open the [latest release](https://github.com/savenXD/Linux-Handy-overlay/releases/latest).
-2. Under **Assets**, download **`cronq-setup.exe`**.
-3. Double-click it and follow the wizard.
-4. If Windows SmartScreen warns (the build is unsigned): click **More info → Run anyway**.
+2. Download **`cronq-setup.exe`** and double-click it.
+3. If Windows SmartScreen warns you (the build is unsigned), click **More info → Run anyway**.
+4. Open a new terminal and type `cronq`, or press **Alt + X** after it starts.
 
-**2. One PowerShell command**
+Prefer one command? In PowerShell:
 ```powershell
 irm https://github.com/savenXD/Linux-Handy-overlay/releases/latest/download/cronq-setup.exe -OutFile $env:TEMP\cronq-setup.exe; & $env:TEMP\cronq-setup.exe
 ```
-The installer fetches the Microsoft Edge WebView2 runtime automatically if it is missing.
 
-<details><summary>Option B — Build from source (needs dependencies)</summary>
+> ⚠️ The Windows port is **beta**. It passes cross-build and Wine tests but is not fully verified on real Windows yet. See [windows/PARITY.md](windows/PARITY.md).
 
-(needs Git, CMake and Visual Studio Build Tools with the C++ workload)
+<details><summary>Build from source (Windows)</summary>
+
+Needs Git, CMake and Visual Studio Build Tools with the C++ workload.
 ```powershell
 git clone https://github.com/savenXD/Linux-Handy-overlay.git cronq; cd cronq
 cmake -S windows -B windows/build -A x64
@@ -73,269 +45,167 @@ cmake --build windows/build --config Release
 powershell -NoProfile -ExecutionPolicy Bypass -File windows/installer/make-dist.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File windows/installer/install.ps1
 ```
+More details: [windows/README.md](windows/README.md).
 </details>
 
-Then open a new terminal and run `cronq`. Uninstall with `windows/installer/uninstall.ps1` (add `-Purge` to also delete settings). Full details: [windows/README.md](windows/README.md).
-
-
-**What the installer does automatically:**
-- 🔍 Detects your distribution (`apt` for Ubuntu/Mint/Debian, `dnf` for Fedora/RHEL, `pacman` for Arch/Manjaro, `zypper` for openSUSE).
-- 📦 Installs any missing build tools and GTK3/WebKit libraries with your permission.
-- ⚙️ Compiles Cronq with maximum optimizations.
-- 🚀 Integrates into your application menu with a custom SVG icon and desktop autostart.
-- 🔗 Ensures `~/.local/bin` is in your shell `$PATH`.
-- 📱 Launches the `cronq-supervisor` daemon in the background immediately!
+**Uninstall:** use *Apps & features*, or run `windows/installer/uninstall.ps1` (add `-Purge` to also delete settings).
 
 ---
 
-## 📑 Table of Contents
-1. [What It Does (In Simple Words)](#-what-it-does-in-simple-words)
-2. [Who Can Run It?](#-who-can-run-it)
-3. [How to Control It](#-how-to-control-it)
-4. [Keyboard Shortcuts](#-keyboard-shortcuts)
-5. [What It Can Bypass vs What It Cannot](#-what-it-can-bypass-vs-what-it-cannot)
-6. [Tech Stack Used](#-tech-stack-used)
-7. [Installation & Setup](#-installation--setup)
-8. [Uninstallation](#-uninstallation)
-9. [Configuration & Customization](#-configuration--customization)
+### 🐧 Linux
 
----
+**Supported systems**
 
-## 💡 What It Does (In Simple Words)
-
-**Cronq** puts a mini companion window right on your desktop screen. It acts as a permanent, floating helper while you code, game, study, or work.
-
-Here is what you can do with it:
-- **Never Loses Focus**: You can click buttons on the overlay, browse mobile pages, or search without your main window (VS Code, terminal, browser) losing typing focus.
-- **Center Drag-to-Move**: Click and hold the center pill in the top header `[ ≡ ]` to smoothly move the window anywhere on your screen.
-- **Resize Freely**: Drag the bottom-right handle `[⤡]` to resize it to any width and height, or press `Alt + F` to go full screen.
-- **Adjust Opacity**: Make it semi-transparent so you can see your code or work through it (`Alt + A` to decrease, `Alt + S` to increase).
-- **Ghost Mode (Click-Through)**: Turn on Ghost mode (`Alt + G`) to make the overlay completely click-through. Mouse clicks pass straight through to whatever window is behind it.
-- **Ghost Typer**: The Ghost footer button opens a page with a boxed editor that grows with your text (up to a cap). Type or paste text or code, pick **Slow**, **Moderate** or **Fast**, then click **Start**. A three-second countdown gives you time to click the destination field. **Stop** cancels immediately. Settings scroll above the pinned Start button. Footer clicks and Enter in the editor never start typing.
-- **Human-like**: On by default, Slow (~40 WPM). Moderate is ~105 WPM (a good typist) and Fast ~140 WPM (a fast typist, with occasional quicker bursts). Pauses, hesitations and thinking delays stay the same length in every mode. Human mode uses log-normal gaps between keys, slower pauses after spaces, punctuation and newlines, slow speed drift, rare hesitations, a 40–170 ms key hold, a modifier lead-in for capitals and symbols, and a short pause every 3–6 lines. Turning Human-like off hides the speed buttons and types instantly in small batches (thousands of characters per second without freezing the window); that pattern is easy to detect. Settings save when changed.
-- **Extra safe**: A switch under Human-like (off by default; hidden when Human-like is off). Works with Slow, Moderate and Fast: about 10% slower, occasional adjacent-key typos on lowercase letters that are noticed after 0–2 more letters, backspaced and retyped (about 3% of letters, never twice within 6 letters), and random thinking pauses after some words, sentences, commas and line breaks. The final text is always exactly what you entered.
-- **Code and formatting**: Line breaks, blank lines, tabs, spaces, and Unicode text remain in the editor. Trailing line breaks are omitted from the typing output to prevent an accidental final Enter; internal line breaks are preserved. **Keep line breaks & tabs** is enabled by default; disable the destination editor’s automatic indentation when typing code to avoid extra indentation. Destination applications still interpret Return and Tab according to their own behavior. Typing stops if the destination loses focus. Timing variation does not guarantee that an application will treat the input as manual typing.
-- **Universal Reset / Refresh**: Tap the reload button `🔄` in the bottom bar to instantly return the overlay to its pristine home state without logging out your accounts or clearing saved cookies.
-- **Built-in ChatGPT & Mobile Web**: Switch instantly between your custom home screen, clean Chrome mobile web, and ChatGPT. All cookies, logins, and sessions are safely saved.
-- **Instant Clean Screenshots**: Press `Alt + P` to take a screenshot. The overlay hides for a millisecond, captures the clean screen underneath, saves it to `~/Pictures/cronq/`, and copies it to your clipboard.
-
----
-
-## 🖥️ Who Can Run It?
-
-| Requirement | Supported | Notes |
-| :--- | :--- | :--- |
-| **Operating System** | **Linux** | Linux Mint (Cinnamon / XFCE / MATE), Ubuntu, Debian, Arch Linux, Fedora, Manjaro, openSUSE, etc. |
-| **Display Server** | **X11 / Xorg** | **Required**. (Default on Linux Mint. On Ubuntu/Fedora, choose "Ubuntu on Xorg" at the login gear icon). |
-| **Compositor** | **Yes** | Any compositor (Muffin, Mutter, Picom, Compiz, KWin) for smooth rounded corners and transparency. |
-| **RAM / CPU** | **Very Low** | Written in lightweight C (<60 MB RAM). Runs smoothly even on older laptops. |
-
-> [!NOTE]
-> **Wayland users**: Cronq requires an X11 / XWayland session. Pure Wayland compositors isolate every window into a sandbox, blocking global click-through shaping and root keyboard monitoring.
-
----
-
-## 🚀 How to Control It
-
-Once installed, control everything with simple terminal commands or keyboard shortcuts:
-
-### Bring It Up
-To open the overlay (or launch it in the background if it is not running):
-```bash
-cronq
-```
-
-### Kill / Close It
-To cleanly stop and close the overlay and its supervisor daemon:
-```bash
-cronq kill
-```
-
-### Other Helpful Commands
-```bash
-cronq toggle    # Show or hide the window
-cronq status    # Check if it is running, opacity, and active mode
-cronq snap      # Take a screenshot
-cronq --help    # View all available CLI options
-```
-
----
-
-## ⌨️ Keyboard Shortcuts
-
-All shortcuts use the **<kbd>Alt</kbd>** key globally from anywhere on your system:
-
-| Shortcut | What It Does |
+| Item | Supported |
 | :--- | :--- |
-| **`Alt` + `X`** | **Toggle Overlay**: Instantly show or hide the companion window. |
-| **`Alt` + `G`** | **Ghost Mode**: Toggle click-through mode on or off. When ON, clicks pass through to windows beneath. |
-| **`Alt` + `A`** | **Decrease Opacity**: Make the window more transparent (-10% step). |
-| **`Alt` + `S`** | **Increase Opacity**: Make the window more solid (+10% step). |
-| **`Alt` + `F`** | **Fullscreen**: Toggle between full screen and your custom window size. |
-| **`Alt` + `D`** | **Default Size**: Reset window back to default phone dimensions (360x640). |
-| **`Alt` + `P`** | **Screenshot**: Capture the screen cleanly (excluding the overlay), copy to clipboard, and save to disk. |
-| **`Alt` + `M`** | **Input Mode**: Switch between `MIRROR` (type to both overlay & background) and `EXCLUSIVE`. |
-| **`Alt` + `W`** | **Ghost Writer**: Synthesize and type text into the active background application. |
+| Distros | Linux Mint, Ubuntu, Debian, Fedora, Arch, Manjaro, openSUSE and similar |
+| Display server | **X11 / Xorg only** (Wayland is not supported) |
+| Desktop | Cinnamon, XFCE, MATE, GNOME, KDE and others, on X11 |
 
-### Mouse Controls Inside the Window
-- **Move Window**: Click and drag the **center handle capsule `[ ≡ ]`** in the top navigation bar.
-- **Resize Window**: Click and drag the **bottom-right grip `[⤡]`** to change width and height smoothly.
-- **Window Controls (Top-Right)**:
-  - `—` Hide / Minimize overlay
-  - `▢` Toggle Fullscreen
-  - `✕` Close / Hide
-- **Bottom Navigation**:
-  - `🏠` Home Page
-  - `🌐` Chrome Mobile Browser
-  - `🤖` ChatGPT Web App
-  - `👻` Open Ghost Typer
-  - `🔄` Universal Refresh / Reset to clean state
+On Ubuntu or Fedora, pick **"on Xorg"** from the gear icon on the login screen.
 
----
+**How to install** (one command)
+```bash
+git clone https://github.com/savenXD/Linux-Handy-overlay.git cronq && cd cronq && ./install.sh
+```
+The script detects your distro, installs what is missing (with your permission), builds Cronq, adds it to your app menu and starts it. Then run `cronq` any time.
 
-## 🛡️ What It Can Bypass vs What It Cannot
+**Uninstall:** `./uninstall.sh` (add `--purge` to also remove saved logins and cache).
 
-### ✅ What It CAN Bypass
-1. **Window Stacking Rules**:
-   - Uses an X11 **override-redirect** window combined with a proactive **restack watcher**.
-   - Bypasses standard window manager layering. It stays above fullscreen games, fullscreen YouTube / VLC videos, and `_NET_WM_STATE_ABOVE` utility windows without getting buried.
-2. **Focus Stealing**:
-   - Standard windows steal keyboard and window focus when clicked.
-   - Cronq **never steals `_NET_ACTIVE_WINDOW`**. You can click, scroll, and interact with the overlay while your code editor or terminal stays active and focused.
-3. **Mouse Blocking (Ghost Mode)**:
-   - Uses the **X11 Shape Extension** (`ShapeInput`) to puncture an empty input mask.
-   - Allows your mouse clicks, drags, and scrolling to pass straight through the overlay to underlying software as if the overlay weren't there.
-4. **Screenshot Occlusion**:
-   - When taking a snapshot (`Alt + P`), it momentarily unmaps itself from the X server, takes the clean capture of the desktop underneath, and remaps instantly with a flash toast.
-5. **Crashes & Disruptions**:
-   - Includes a background watchdog supervisor (`cronq-supervisor`) that automatically restores the process if terminated abnormally.
+<details><summary>Manual install (Linux)</summary>
+
+```bash
+# Ubuntu / Debian / Mint
+sudo apt install -y build-essential pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev \
+  libx11-dev libxi-dev libxext-dev libxrandr-dev libxtst-dev xdotool xclip maim
+# Fedora
+sudo dnf install -y gcc make pkgconf-pkg-config gtk3-devel webkit2gtk4.1-devel \
+  libX11-devel libXi-devel libXtst-devel libXrandr-devel libXext-devel xdotool xclip maim
+# Arch / Manjaro
+sudo pacman -S --needed base-devel gtk3 webkit2gtk-4.1 libx11 libxi libxtst libxrandr libxext xdotool xclip maim
+
+make && make install
+```
+</details>
 
 ---
 
-### ❌ What It CANNOT Bypass
-1. **Wayland Display Server Restrictions**:
-   - Pure Wayland compositors isolate every window into a sandbox. Wayland will not allow global click-through shaping, raw global keyboard event snooping, or arbitrary top-level restacking. You must run an **X11 / Xorg** session.
-2. **Root & Kernel-Level Protections**:
-   - Cannot bypass kernel-level security tools, hardware-exclusive direct-rendering (DRM/KMS VT consoles outside X11), or games running with kernel anti-cheat drivers.
-3. **Complex Asian Multi-Stage IMEs**:
-   - Input Method Editors (like Japanese Mozc or Chinese Pinyin) that rely on external candidate popup windows require active window focus. In Mirror mode, standard keys are mirrored, but IME composition candidate menus may require switching to Exclusive mode (`Alt + M`).
-4. **Hardware Anti-Bot Sensor Tests**:
-   - The browser uses a modern Android/Chrome mobile user-agent with standard WebKit. While it logs into websites like Google and ChatGPT cleanly, sites with specialized native app bot-checkers checking for physical phone hardware (e.g. mobile accelerometer gyro chips) can tell it is running in an embedded browser environment.
+## ⭐ Major Features
+
+# 🛡️ NO FULL-SCREEN APP CAN STOP IT
+Cronq stays **on top of fullscreen games, fullscreen videos, and borderless-fullscreen apps**. It keeps itself above them and re-raises itself if something tries to bury it.
+
+# 🎯 NEVER STEALS FOCUS
+Click, scroll and type in the overlay while your editor, game or terminal stays the active window.
+
+# 👻 GHOST MODE (CLICK-THROUGH)
+Press **Alt + G** and every click passes straight through the overlay to whatever is behind it.
+
+# ⌨️ GHOST TYPER (HUMAN-LIKE TYPING)
+Paste text, pick Slow / Moderate / Fast, press Start, and Cronq types it into the app you clicked, with human-like timing and optional "extra safe" typos that get corrected.
+
+# 📸 CLEAN SCREENSHOTS
+**Alt + P** hides the overlay for a split second, captures the screen without it, saves the image and copies it to your clipboard.
+
+# 🌐 BUILT-IN MOBILE BROWSER + CHATGPT
+A phone-sized browser and ChatGPT, with logins that stay saved between sessions.
+
+# 🔍 SEE-THROUGH, RESIZABLE, MOVABLE
+Change opacity, drag it anywhere, resize it, or go fullscreen.
+
+# 🔒 PANIC BUTTONS *(Windows)*
+**Alt + K** instantly hides the overlay and locks all other shortcuts. **Alt + K + X** unlocks. **Alt + Shift + K** is a kill switch that removes Cronq from the PC after you confirm.
 
 ---
 
-## 🛠️ Tech Stack Used
+## ⌨️ Shortcuts
 
-| Component | Technology | Rationale |
+All shortcuts work globally while holding **Alt**.
+
+| Shortcut | What it does |
+| :--- | :--- |
+| **Alt + X** | Show / hide the overlay |
+| **Alt + G** | Ghost mode (click-through) on / off |
+| **Alt + A** / **Alt + S** | Less / more opaque |
+| **Alt + F** | Fullscreen on / off |
+| **Alt + D** | Back to default size (360×640) |
+| **Alt + P** | Clean screenshot |
+| **Alt + M** | Typing mode: Mirror ⇄ Exclusive |
+| **Alt + W** | Start / cancel Ghost Writer |
+| **Alt + K** · **Alt + K + X** · **Alt + Shift + K** | Lock · Unlock · Kill switch *(Windows)* |
+
+**Mouse:** drag the top handle to move, drag the bottom-right corner (or edges on Windows) to resize. The bottom bar has Back, Home, Reset, Typer and Snap.
+
+**Command line**
+```bash
+cronq            # open / bring to front
+cronq toggle     # show or hide
+cronq status     # current state
+cronq snap       # screenshot
+cronq kill       # quit
+cronq --help     # everything else
+```
+
+**Mirror vs Exclusive:** in *Mirror* your keystrokes go to both the overlay and the app behind it. In *Exclusive* they go only to the overlay.
+
+---
+
+## 🧰 Tech Stack
+
+| | Linux | Windows |
 | :--- | :--- | :--- |
-| **Language** | **C (GNU11)** | Ultra-fast execution, zero runtime bloat, minimal memory footprint (<60 MB RAM). |
-| **GUI Framework** | **GTK+ 3.0 & Cairo** | Native Linux GUI with RGBA visual support for transparent, anti-aliased phone borders. |
-| **Web Engine** | **WebKitGTK 4.1 (libsoup-3.0)** | Modern web standards, fast hardware-accelerated rendering, persistent cookies/local storage. |
-| **Window System** | **X11 / Xlib** | Direct interaction with X server for override-redirect windows and restacking dominance. |
-| **Input Sniffing** | **XInput 2.2 (`libXi`)** | Raw root window keyboard listening without stealing focus or intercepting apps. |
-| **Click-Through** | **XShape (`libXext`)** | Real-time shape input masking for 100% mouse pass-through in Ghost mode. |
-| **Keystroke Injection** | **XTest 2.2 (`libXtst`)** | Ghost Writer simulated typing into active target windows. |
-| **IPC Control** | **Unix Domain Sockets** | Instantaneous, single-instance communication between CLI terminal and background daemon. |
+| **Language** | C (GNU11) | C++17 |
+| **Window / UI** | GTK 3 + Cairo | Win32 |
+| **Browser engine** | WebKitGTK 4.1 | Microsoft Edge WebView2 |
+| **Stay-on-top, global keys** | X11 / Xlib, XInput2 | Win32 topmost + low-level keyboard hook |
+| **Click-through** | XShape | Win32 layered windows |
+| **Typing injection** | XTest | SendInput |
+| **Build** | Make | CMake, Inno Setup (installer) |
+| **CLI ↔ overlay** | Unix domain socket | Local IPC |
+
+Both versions follow one shared behavior spec: [shared/spec/behavior.md](shared/spec/behavior.md). Memory use is low (under about 60 MB on Linux).
 
 ---
 
-## 📦 Installation & Setup
+## ⚠️ What It Can't Do
 
-### Method 1: Automated 1-Step Installer (Recommended)
-```bash
-git clone https://github.com/savenXD/Linux-Handy-overlay.git cronq
-cd cronq
-./install.sh
-```
-
-### Method 2: Manual Installation
-
-**1. Install Dependencies**
-- **Ubuntu / Debian / Linux Mint**:
-  ```bash
-  sudo apt update
-  sudo apt install -y build-essential pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev \
-                      libx11-dev libxi-dev libxext-dev libxrandr-dev libxtst-dev xdotool xclip maim
-  ```
-- **Fedora / RHEL**:
-  ```bash
-  sudo dnf install -y gcc gcc-c++ make pkgconf-pkg-config gtk3-devel webkit2gtk4.1-devel \
-                      libX11-devel libXi-devel libXtst-devel libXrandr-devel libXext-devel xdotool xclip maim
-  ```
-- **Arch Linux / Manjaro**:
-  ```bash
-  sudo pacman -S --needed base-devel gtk3 webkit2gtk-4.1 libx11 libxi libxtst libxrandr libxext xdotool xclip maim
-  ```
-
-**2. Build & Install**
-```bash
-make
-make install
-```
+- **Wayland:** pure Wayland blocks global shortcuts, click-through and always-on-top. Use an X11 session.
+- **Exclusive-fullscreen / kernel anti-cheat games:** apps that take over the display exclusively, and games with kernel-level protection, can still hide it.
+- **Complex IMEs** (e.g. Japanese, Chinese candidate popups) may need *Exclusive* mode.
+- **Phone-sensor checks:** sites that test for real phone hardware can tell it is an embedded browser.
 
 ---
 
-## 🗑️ Uninstallation
+## ⚙️ Configuration
 
-To completely remove Cronq from your system:
-
-```bash
-./uninstall.sh
-```
-Or with manual make:
-```bash
-make uninstall
-```
-To purge saved browser cookies, sessions, and cache as well, pass `--purge`:
-```bash
-./uninstall.sh --purge
-```
-
----
-
-## ⚙️ Configuration & Customization
-
-The settings file is located at `~/.config/cronq/config.ini`:
+Linux: `~/.config/cronq/config.ini` · Windows: `%APPDATA%\cronq\config.ini`
 
 ```ini
 [General]
 width = 360
 height = 640
-margin = 12
-# Options: bottom-left, bottom-right, top-left, top-right
-corner = bottom-left
-# Options: primary or monitor index (0, 1, ...)
-monitor = primary
+corner = bottom-left      # bottom-left, bottom-right, top-left, top-right
 opacity = 0.98
 start_visible = false
-# Options: mirror, exclusive
-default_key_mode = mirror
+default_key_mode = mirror # mirror or exclusive
 
 [Browser]
 home_url = https://html5test.com
-chatgpt_url = https://chatgpt.com
 search_url_template = https://duckduckgo.com/?q=%s
-user_agent = Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36
 
 [Hotkeys]
-# Global hotkey letter bindings (combined with Alt)
 toggle_key = x
 ghost_key = g
-opacity_dec_key = a
-opacity_inc_key = s
-fullscreen_key = f
-default_size_key = d
 snap_key = p
 mode_key = m
 ghost_writer_key = w
 ```
+Apply changes without restarting (Linux): `cronq --reload-config`.
 
-You can reload configuration changes on the fly without restarting:
-```bash
-cronq --reload-config
-```
+---
 
+## 🧪 Development
 
-### Ghost Type page regression test
-
-Run `bash tests/test_ghost_page.sh` in a dedicated X11 test display (for example, `DISPLAY=:91 bash tests/test_ghost_page.sh` inside Xephyr). It uses a temporary configuration and an isolated target window to check navigation, multiline text, slider/switch behavior, key hold and gap timing, phone layout, countdown, exact keystrokes, chunk pauses, cancellation, and focus changes. It does not start the normal app daemon.
+- Linux tests live in [tests/](tests/) (for example `bash tests/test_ghost_page.sh` in a dedicated X11 test display such as Xephyr).
+- Windows details, test checklist and parity report: [windows/README.md](windows/README.md), [windows/PARITY.md](windows/PARITY.md).
+- History: [DEVLOG.md](DEVLOG.md).
