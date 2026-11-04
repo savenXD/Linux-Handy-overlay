@@ -1,0 +1,4 @@
+#pragma once
+
+#define CRONQ_VERSION "@CRONQ_VERSION@"
+#define CRONQ_VERSION_FULL "cronq @CRONQ_VERSION@ (windows)"

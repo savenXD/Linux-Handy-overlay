@@ -1,0 +1,50 @@
+name: windows
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  linux-untouched:
+    # Windows work must never modify the Linux implementation.
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fail if Linux files changed
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          windows_changed=$(git diff --name-only "origin/$BASE_REF...HEAD" -- windows shared antigravity .github/workflows/windows.yml)
+          [ -n "$windows_changed" ] || exit 0
+          changed=$(git diff --name-only "origin/$BASE_REF...HEAD" -- src Makefile scripts install.sh uninstall.sh tests cronq.desktop)
+          if [ -n "$changed" ]; then
+            echo "Windows branch touches Linux files:"; echo "$changed"; exit 1
+          fi
+
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S windows -B windows/build -A x64
+      - name: Build
+        run: cmake --build windows/build --config Release
+      - name: Unit tests
+        run: ctest --test-dir windows/build -C Release --output-on-failure
+      - name: Installer script regression
+        run: pwsh -NoProfile -File windows/tests/install_script_test.ps1
+      - name: Stage distribution
+        run: pwsh windows/installer/make-dist.ps1
+      - name: Install Inno Setup
+        run: choco install innosetup -y
+      - name: Build Installer
+        run: '& "C:\Program Files (x86)\Inno Setup 6\iscc.exe" windows\installer\cronq.iss'
+      - name: Upload Installer Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cronq-setup
+          path: windows/dist/cronq-setup-*.exe

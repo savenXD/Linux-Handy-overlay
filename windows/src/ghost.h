@@ -1,0 +1,40 @@
+#pragma once
+
+#include "common.h"
+#include "ghost_logic.h"
+
+namespace cronq {
+namespace ghost {
+
+bool Init();
+void Cleanup();
+
+void Run();
+void Cancel();
+bool IsTyping();
+bool IsGuardActive();
+void OnForegroundChanged(HWND hwnd);
+void OnProgressTick();
+
+ghost_logic::Timing GetTiming();
+void SetTiming(ghost_logic::Timing t);
+
+// UI integration
+void OnGhostStartRequested();
+void OnGhostText(const std::string& text);
+void OnGhostSettings(bool human, int speed, bool safe);
+
+// Timers
+constexpr UINT_PTR kGhostCountdownTimerId = 1004;
+constexpr UINT_PTR kGhostSettleTimerId = 1005;
+constexpr UINT_PTR kGhostStepTimerId = 1006;
+constexpr UINT_PTR kGhostGuardDisengageTimerId = 1007;
+constexpr UINT_PTR kGhostProgressTimerId = 1008;
+
+void OnCountdownTick();
+void OnSettleTick();
+void StepTyping();
+void OnGuardDisengageTimeout();
+
+}  // namespace ghost
+}  // namespace cronq

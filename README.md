@@ -1,6 +1,6 @@
 # 📱 Cronq
 
-> A sleek, floating, non-focus-stealing companion overlay designed for Linux. It stays visible on top of all windows without ever stealing your typing focus.
+> A sleek, floating, non-focus-stealing companion overlay designed for Linux and Windows. It stays visible on top of all windows without ever stealing your typing focus.
 
 ```text
    +-------------------------------------------------------------+
@@ -21,7 +21,28 @@
 
 ---
 
-## ⚡ 1-Step Consumer Quick Install
+## ⚡ Quick Install
+
+### 🐧 Linux (X11) — one command
+```bash
+git clone https://github.com/savenXD/Linux-SEA-Cheat.git cronq && cd cronq && ./install.sh
+```
+Then run `cronq` (or find **Cronq** in your app menu). Remove it later with `./uninstall.sh`.
+
+### 🪟 Windows 10/11 (64-bit) — PowerShell
+> ⚠️ The Windows port is **beta**: it passes cross-build/Wine tests but hasn't been fully verified on real Windows yet. See [windows/PARITY.md](windows/PARITY.md).
+
+**Option A — setup installer (if you have `cronq-setup-<version>.exe`):** double-click it. No admin rights needed.
+
+**Option B — build and install from source** (needs Git, CMake and Visual Studio Build Tools with the C++ workload):
+```powershell
+git clone https://github.com/savenXD/Linux-SEA-Cheat.git cronq; cd cronq
+cmake -S windows -B windows/build -A x64
+cmake --build windows/build --config Release
+powershell -NoProfile -ExecutionPolicy Bypass -File windows/installer/make-dist.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File windows/installer/install.ps1
+```
+Then open a new terminal and run `cronq`. Uninstall with `windows/installer/uninstall.ps1` (add `-Purge` to also delete settings). Full details: [windows/README.md](windows/README.md).
 
 
 **What the installer does automatically:**

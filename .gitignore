@@ -1,3 +1,6 @@
 bin/
 *.o
 *.log
+
+# Windows build output
+windows/build*/
