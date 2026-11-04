@@ -17,8 +17,8 @@ fixture_keys = {(section, key) for section in fixture.sections() for key in fixt
 # The two legacy fallback locations are read by both parsers but do not need duplicate defaults.
 legacy = {('Snap', 'snap_key'), ('GhostWriter', 'ghost_writer_key')}
 missing = linux_keys - windows_keys
-unexpected = windows_keys - linux_keys - {('Appearance', 'mode')} # Windows appearance UI
-implicit = {('Browser', 'chatgpt_allowlist'), ('Hotkeys', 'shield_clipboard_keys'), ('Privacy', 'hide_from_capture')}  # Privacy: Windows-only
+unexpected = windows_keys - linux_keys - {('Appearance', 'mode'), ('Privacy', 'hide_from_capture')}  # Windows-only: appearance UI, capture protection
+implicit = {('Browser', 'chatgpt_allowlist'), ('Hotkeys', 'shield_clipboard_keys')}
 missing_defaults = linux_keys - legacy - implicit - fixture_keys
 if not linux_keys or missing or unexpected or missing_defaults:
     print(f'FAIL: missing Windows keys={sorted(missing)}, extra keys={sorted(unexpected)}, missing fixture defaults={sorted(missing_defaults)}')
