@@ -74,6 +74,21 @@ int main() {
     CHECK(SafeMonitorIndex(99, 2, 1) == 1);
     CHECK(SafeMonitorIndex(0, 0) == 0);  // 0 monitors -> 0
 
+    // Scaled laptop: do not consume nearly the full usable screen height.
+    w = 450; h = 800;
+    FitPhone({0, 0, 1920, 1020}, 15, &w, &h);
+    CHECK(w == 417 && h == 742);
+    CalcCorner({0, 0, 1920, 1020}, w, h, 15, "bottom-left", &x, &y);
+    CHECK(x == 15 && y == 263);
+    // Negative coordinates and small work areas stay on their own monitor.
+    w = 720; h = 1280;
+    FitPhone({-1280, -720, 0, 0}, 24, &w, &h);
+    CHECK(w <= 1232 && h <= 504);
+    CalcCorner({-1280, -720, 0, 0}, w, h, 24, "top-right", &x, &y);
+    CHECK(x >= -1280 && y >= -720 && x + w <= 0 && y + h <= 0);
+    CalcCorner({-800, -600, 0, 0}, 900, 700, 12, "bottom-right", &x, &y);
+    CHECK(x == -800 && y == -600);
+
     if (g_failures == 0) {
         std::printf("all checks passed\n");
         return 0;

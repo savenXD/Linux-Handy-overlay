@@ -17,6 +17,7 @@
 #include <climits>
 #include <cstdlib>
 #include <vector>
+#include <algorithm>
 
 namespace cronq {
 namespace overlay {
@@ -104,6 +105,14 @@ UINT MonitorDpi(HMONITOR h) {
     return 96;
 }
 
+void DefaultDimensions(const Mon& mon, int* width, int* height) {
+    const auto& cfg = config::Get();
+    *width = S(cfg.width);
+    *height = S(cfg.height);
+    geometry::FitPhone({mon.work.left, mon.work.top, mon.work.right, mon.work.bottom},
+                       S(cfg.margin), width, height);
+}
+
 // The position is computed against the work area so the taskbar stays reachable.
 void CalcPosition(int* outX, int* outY) {
     const AppConfig& cfg = config::Get();
@@ -160,14 +169,17 @@ void MoveTo(int x, int y) {
 
 void SetCompactMode(bool compact) {
     if (!g_hwnd || g_maximized) return;
-    int target = compact ? S(kCompactHeight) : S(kHeight);
+    Mon mon = Describe(MonitorFromWindow(g_hwnd, MONITOR_DEFAULTTONEAREST));
+    int defaultW, defaultH;
+    DefaultDimensions(mon, &defaultW, &defaultH);
+    int target = compact ? std::min(S(kCompactHeight), defaultH) : defaultH;
     if (g_h == target) return;
 
     int oldH = g_h;
     g_h = target;
     if (g_userMoved) {
-        g_y -= (target - oldH);
-        if (g_y < 0) g_y = 0;
+        if (config::Get().corner.find("top-") != 0) g_y -= (target - oldH);
+        g_y = std::clamp(g_y, int(mon.work.top), std::max(int(mon.work.top), int(mon.work.bottom) - target));
     } else {
         CalcPosition(&g_x, &g_y);
     }
@@ -609,6 +621,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             browser::ResizeHost();
             ui::PushState();
             return 0;
+        case WM_CRONQ_BROWSER_RECOVER:
+            browser::Recover(static_cast<unsigned>(wp), static_cast<unsigned>(lp));
+            return 0;
         case WM_LBUTTONDOWN:
             OnLButtonDown((short)LOWORD(lp), (short)HIWORD(lp));
             return 0;
@@ -773,8 +788,8 @@ bool Init(bool startVisible) {
 
     Mon mon = ConfiguredMonitor();
     g_dpi = MonitorDpi(mon.handle);
-    g_w = S(cfg.width);
-    g_h = S(kCompactHeight);  // the home screen starts compact, like Linux
+    DefaultDimensions(mon, &g_w, &g_h);
+    g_h = std::min(g_h, S(kCompactHeight));
     g_opacity = cfg.opacity;
     CalcPosition(&g_x, &g_y);
 
@@ -875,8 +890,8 @@ void ApplyConfig() {
     const AppConfig& cfg = config::Get();
     Mon mon = ConfiguredMonitor();
     g_dpi = MonitorDpi(mon.handle);
-    g_w = S(cfg.width);
-    g_h = S(cfg.height);
+    DefaultDimensions(mon, &g_w, &g_h);
+    if (g_app == "home") g_h = std::min(g_h, S(kCompactHeight));
     g_opacity = cfg.opacity;
     g_maximized = false;
     g_userMoved = false;
@@ -901,7 +916,7 @@ double GetOpacity() { return g_opacity; }
 
 void SetSize(int width, int height) {
     if (!g_hwnd) return;
-    Mon mon = PrimaryMonitor();
+    Mon mon = Describe(MonitorFromWindow(g_hwnd, MONITOR_DEFAULTTONEAREST));
     int screenW = mon.full.right - mon.full.left;
     int screenH = mon.full.bottom - mon.full.top;
 
@@ -922,7 +937,7 @@ void SetSize(int width, int height) {
 
 void SetFullscreen() {
     if (!g_hwnd) return;
-    Mon mon = PrimaryMonitor();
+    Mon mon = Describe(MonitorFromWindow(g_hwnd, MONITOR_DEFAULTTONEAREST));
     int monW = mon.full.right - mon.full.left;
     int monH = mon.full.bottom - mon.full.top;
 
@@ -947,15 +962,17 @@ void SetFullscreen() {
 
 void SetDefaultSize() {
     if (!g_hwnd) return;
-    const AppConfig& cfg = config::Get();
-    int defW = cfg.width > 0 ? S(cfg.width) : S(kWidth);
-    int defH = cfg.height > 0 ? S(cfg.height) : S(kHeight);
+    Mon mon = ConfiguredMonitor();
+    g_dpi = MonitorDpi(mon.handle);
+    int defW, defH;
+    DefaultDimensions(mon, &defW, &defH);
+    if (g_app == "home") defH = std::min(defH, S(kCompactHeight));
     g_userMoved = false;
     SetSize(defW, defH);  // size first: the corner position depends on the final height
     CalcPosition(&g_x, &g_y);
     MoveTo(g_x, g_y);
     g_maximized = false;
-    ShowToast("Default size (360x640)");
+    ShowToast("Default size restored");
 }
 
 void GetGeometry(int* x, int* y, int* w, int* h) {

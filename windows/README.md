@@ -171,7 +171,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File windows/installer/uninstall.
 - **Focus preservation:** Uses non-activating windows and restores external focus if a child view activates. Native WebView2 interactions still need Windows verification.
 - **Clean screenshot captures:** Uses Windows Display Affinity (`WDA_EXCLUDEFROMCAPTURE`) so screenshots captured via Alt+P or `--snap` do not contain the overlay window.
 - **Crash supervision:** `cronqw.exe --supervise` automatically restarts the overlay within 2 seconds if an unexpected fault occurs and records restart history in `crash.log`. An unhandled fault also writes `crash-<timestamp>-<pid>.log` with exception, module offset, and x64 registers.
-- **DPI scaling:** Configuration sizes scale with monitor DPI. Moving between monitors keeps the current physical rectangle and rescales controls; Default Size uses the new DPI. Verify mixed-DPI behavior on Windows.
+- **DPI scaling:** Default phone dimensions scale with monitor DPI and fit within 75% of the usable screen height, preserving their aspect ratio. Home stays compact; expanded views honor the configured height. Corner positioning stays within the work area, above the taskbar. Fullscreen and manual resizing use the current monitor.
+- **Browser reliability:** UI, browser, ChatGPT, and sign-in popups have separate native host windows so the UI cannot cover web content after resizing or switching apps. Renderer failures recreate the affected view; browser-process failures recreate the environment with the same saved profile. ChatGPT and sign-in use the current WebView2 browser identity; the configured mobile user agent applies to the Chrome view.
 
 ### What Cronq CANNOT bypass (Architectural & Security Limits):
 - **Exclusive-Fullscreen DirectX/Vulkan Games:** Traditional exclusive-fullscreen applications seize direct hardware presentation buffers. Run games in **Borderless Windowed** mode to use overlays.
@@ -194,6 +195,20 @@ powershell -NoProfile -ExecutionPolicy Bypass -File windows/installer/uninstall.
 ---
 
 ## Automated verification
+
+Native WebView2 regression (run separately from CTest; opens a window and deliberately crashes only its own WebView2 processes):
+
+```powershell
+# Use an isolated profile so the test does not touch your normal sessions.
+$env:LOCALAPPDATA = "$PWD\windows\build\acceptance-profile"
+$env:APPDATA = $env:LOCALAPPDATA
+New-Item -ItemType Directory -Force $env:LOCALAPPDATA | Out-Null
+windows/build/Release/browser_runtime_test.exe
+# Also load live ChatGPT and DuckDuckGo and pause for visual inspection:
+windows/build/Release/browser_runtime_test.exe --live
+```
+
+Run those commands in a dedicated PowerShell session. The test covers repeated app switching and hide/show, content bounds and native stacking, two renderer crashes, whole-browser recovery, and a rendered preview. The live mode requires internet access; it does not sign in or submit prompts.
 
 From Linux, with llvm-mingw, Wine, Xephyr, Python 3 and X11 tools installed:
 

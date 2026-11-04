@@ -32,11 +32,12 @@ std::string g_app = "home";
 #ifdef CRONQ_WEBVIEW2
 constexpr int kUi = 0, kBrowser = 1, kChat = 2, kPopup = 3;
 struct View {
+    HWND host = nullptr;
     ComPtr<ICoreWebView2Controller> controller;
     ComPtr<ICoreWebView2> core;
     std::vector<std::function<void()>> detach;
     unsigned generation = 0;
-    bool creating = false, loading = false, recovered = false, scriptReady = true;
+    bool creating = false, loading = false, scriptReady = true;
     std::string uri, title, pending;
 };
 struct PendingPopup {
@@ -63,6 +64,7 @@ struct State {
     RECT slot{};
     bool slotValid = false, uiLoaded = false, contentStarted = false, muted = false;
     int activeIndex = kBrowser;
+    unsigned environmentGeneration = 0;
 } g;
 
 bool Check(HRESULT hr, const char* operation) {
@@ -91,8 +93,9 @@ void CloseView(int i) {
     if (v.controller) Check(v.controller->Close(), "controller Close");
     v.core.Reset();
     v.controller.Reset();
+    if (v.host) DestroyWindow(v.host);
+    v.host = nullptr;
     v.loading = false;
-    v.recovered = false;
     v.uri.clear();
     v.title.clear();
 }
@@ -116,10 +119,9 @@ void Fail(const char* operation, HRESULT hr) {
 }
 void Navigate(View& v, const std::string& uri) {
     if (!uri.empty()) {
+        v.pending = uri;  // Keep a host-owned URL even if the renderer/browser dies.
         if (v.core && v.scriptReady)
             Check(v.core->Navigate(Widen(uri).c_str()), "Navigate");
-        else
-            v.pending = uri;
     }
 }
 void Mute(View& v) {
@@ -176,7 +178,9 @@ bool ConfigureView(int i) {
     if (!Check(v.core->get_Settings(settings.ReleaseAndGetAddressOf()), "get_Settings")) return false;
     ComPtr<ICoreWebView2Settings2> settings2;
     if (!Check(settings.As(&settings2), "Query settings2")) return false;
-    if (!Check(settings2->put_UserAgent(Widen(config::Get().userAgent).c_str()), "put_UserAgent") ||
+    // Use the runtime's current identity for ChatGPT/auth, rather than an old
+    // Android Chrome UA paired with Windows Edge client hints.
+    if ((i == kBrowser && !Check(settings2->put_UserAgent(Widen(config::Get().userAgent).c_str()), "put_UserAgent")) ||
         !Check(settings->put_IsStatusBarEnabled(FALSE), "put_IsStatusBarEnabled"))
         return false;
     // The UI host is trusted; remote content never receives the native bridge.
@@ -262,11 +266,13 @@ bool ConfigureView(int i) {
                   "Query process failure args"))
             Check(more->get_ExitCode(&exitCode), "get_ExitCode");
         LogErr("BROWSER", "ProcessFailed view=%d kind=%d exit=%d", i, int(kind), exitCode);
-        if (!g.views[i].recovered && (kind == COREWEBVIEW2_PROCESS_FAILED_KIND_RENDER_PROCESS_EXITED ||
-                                      kind == COREWEBVIEW2_PROCESS_FAILED_KIND_BROWSER_PROCESS_EXITED)) {
-            g.views[i].recovered = true;
-            Check(g.views[i].core->Reload(), "process recovery Reload");
-        }
+        // Recover outside this COM callback. Reload cannot revive a dead browser
+        // process, and closing controllers inside an event is reentrant.
+        if (kind == COREWEBVIEW2_PROCESS_FAILED_KIND_BROWSER_PROCESS_EXITED)
+            PostMessageW(g_parent, WM_CRONQ_BROWSER_RECOVER, 4, g.environmentGeneration);
+        else if (kind == COREWEBVIEW2_PROCESS_FAILED_KIND_RENDER_PROCESS_EXITED ||
+                 kind == COREWEBVIEW2_PROCESS_FAILED_KIND_RENDER_PROCESS_UNRESPONSIVE)
+            PostMessageW(g_parent, WM_CRONQ_BROWSER_RECOVER, i, g.views[i].generation);
     });
     if (i == kBrowser || i == kChat)
         ok &= BIND(i, NewWindowRequested, ICoreWebView2NewWindowRequestedEventArgs*,
@@ -305,10 +311,16 @@ bool ConfigureView(int i) {
 }
 
 void CreateView(int i) {
-    if (g_shuttingDown || !g.environment || g.views[i].creating) return;
+    if (g_shuttingDown || !g.environment || g.views[i].creating || g.views[i].controller) return;
     auto& v = g.views[i];
     v.creating = true;
     unsigned gen = ++v.generation;
+    // Give each controller its own native host. Sibling WebView2 controllers
+    // sharing one parent can reorder their internal child HWNDs when resized,
+    // leaving the full-window black UI surface above the remote page.
+    v.host = CreateWindowExW(WS_EX_NOACTIVATE, L"STATIC", L"", WS_CHILD | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
+                             0, 0, 1, 1, g_parent, nullptr, GetModuleHandleW(nullptr), nullptr);
+    if (!v.host) { Fail("Create view host", HRESULT_FROM_WIN32(GetLastError())); return; }
     Log("BROWSER", "Creating controller view=%d generation=%u", i, gen);
     auto handler = MakeHandler<ICoreWebView2CreateCoreWebView2ControllerCompletedHandler, HRESULT,
                                ICoreWebView2Controller*>([i, gen](
@@ -346,10 +358,7 @@ void CreateView(int i) {
             auto scriptDone = MakeHandler<ICoreWebView2AddScriptToExecuteOnDocumentCreatedCompletedHandler,
                                           HRESULT, LPCWSTR>([gen](HRESULT result, LPCWSTR) -> HRESULT {
                 if (!Live(kChat, gen)) return S_OK;
-                if (!Check(result, "AddScript completed")) {
-                    Fail("ChatGPT script", result);
-                    return S_OK;
-                }
+                Check(result, "AddScript completed"); // optional Enter helper must not block the page
                 auto& chat = g.views[kChat];
                 chat.scriptReady = true;
                 std::string url = chat.pending.empty() ? "https://chatgpt.com" : chat.pending;
@@ -360,8 +369,8 @@ void CreateView(int i) {
             hr = view.core->AddScriptToExecuteOnDocumentCreated(
                 Widen(browser_logic::ChatGptUserScript()).c_str(), scriptDone.Get());
             if (!Check(hr, "AddScriptToExecuteOnDocumentCreated")) {
-                Fail("ChatGPT script", hr);
-                return S_OK;
+                view.scriptReady = true;
+                Navigate(view, view.pending.empty() ? "https://chatgpt.com" : view.pending);
             }
         } else {
             std::string url = i == kUi               ? "https://cronq.ui/index.html"
@@ -375,7 +384,7 @@ void CreateView(int i) {
         ui::PushState();
         return S_OK;
     });
-    HRESULT hr = g.environment->CreateCoreWebView2Controller(g_parent, handler.Get());
+    HRESULT hr = g.environment->CreateCoreWebView2Controller(v.host, handler.Get());
     if (FAILED(hr)) Fail("CreateCoreWebView2Controller start", hr);
 }
 void UpdateLayout() {
@@ -390,7 +399,13 @@ void UpdateLayout() {
                                    (i == kPopup ? bool(v.core)
                                                 : !HasPopup() && ((i == kBrowser && g_app == "browser") ||
                                                                   (i == kChat && g_app == "chatgpt"))));
-        RECT bounds = i == kUi ? client : g.slot;
+        const RECT placement = i == kUi ? client : g.slot;
+        const int width = placement.right - placement.left;
+        const int height = placement.bottom - placement.top;
+        SetWindowPos(v.host, i == kUi ? HWND_BOTTOM : HWND_TOP,
+                     placement.left, placement.top, width, height,
+                     SWP_NOACTIVATE | (visible ? SWP_SHOWWINDOW : SWP_HIDEWINDOW));
+        RECT bounds{0, 0, width, height};
         Check(v.controller->put_Bounds(bounds), "put_Bounds");
         Check(v.controller->put_IsVisible(visible ? TRUE : FALSE), "put_IsVisible");
     }
@@ -402,7 +417,9 @@ bool Init(HWND parent) {
     g_parent = parent;
     g_shuttingDown = false;
     g_app = overlay::CurrentApp();
+    g_failure.clear();
 #ifdef CRONQ_WEBVIEW2
+    g.slotValid = g.uiLoaded = g.contentStarted = false;
     g.muted = !overlay::IsVisible();
     wchar_t exe[32768];
     DWORD count = GetModuleFileNameW(nullptr, exe, 32768);
@@ -412,7 +429,7 @@ bool Init(HWND parent) {
     }
     std::wstring dll(exe, count);
     dll = dll.substr(0, dll.find_last_of(L"\\/")) + L"\\WebView2Loader.dll";
-    g.loader = LoadLibraryW(dll.c_str());
+    if (!g.loader) g.loader = LoadLibraryW(dll.c_str());
     if (!g.loader) {
         Fail("WebView2Loader.dll not found", HRESULT_FROM_WIN32(GetLastError()));
         return false;
@@ -431,10 +448,11 @@ bool Init(HWND parent) {
         return false;
     }
     Log("BROWSER", "Creating environment userDataFolder='%s'", Narrow(folder).c_str());
+    const unsigned environmentGeneration = ++g.environmentGeneration;
     auto handler = MakeHandler<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler, HRESULT,
                                ICoreWebView2Environment*>(
-        [](HRESULT hr, ICoreWebView2Environment* environment) -> HRESULT {
-            if (g_shuttingDown) return S_OK;
+        [environmentGeneration](HRESULT hr, ICoreWebView2Environment* environment) -> HRESULT {
+            if (g_shuttingDown || g.environmentGeneration != environmentGeneration) return S_OK;
             Log("BROWSER", "Environment callback hr=0x%08lX", hr);
             if (FAILED(hr) || !environment) {
                 Fail("environment callback", FAILED(hr) ? hr : E_POINTER);
@@ -531,7 +549,8 @@ void GoForward() {
 }
 void Reload() {
 #ifdef CRONQ_WEBVIEW2
-    if (Active().core) Check(Active().core->Reload(), "Reload");
+    if (!Active().core || !Check(Active().core->Reload(), "Reload"))
+        Recover(ActiveIndex(), Active().generation);
 #endif
 }
 void Stop() {
@@ -581,6 +600,35 @@ void Resume() {
 #ifdef CRONQ_WEBVIEW2
     g.muted = false;
     for (auto& v : g.views) Mute(v);
+    ResizeHost();
+    UpdateLayout();
+#endif
+}
+void Recover(unsigned index, unsigned generation) {
+#ifdef CRONQ_WEBVIEW2
+    if (g_shuttingDown) return;
+    if (index == 4) {
+        // Coalesce process-failure notifications from all views in this environment.
+        if (!g.environment || g.environmentGeneration != generation) return;
+        for (int i : {kBrowser, kChat}) {
+            auto& v = g.views[i];
+            if (!v.uri.empty() && v.uri != "about:blank") v.pending = v.uri;
+        }
+        HWND parent = g_parent;
+        Cleanup();
+        Init(parent);  // same user-data folder: retain cookies and sign-in
+        return;
+    }
+    if (index >= 4 || g.views[index].generation != generation) return;
+    auto& v = g.views[index];
+    if (index == kPopup) { ClosePopup(); return; }
+    if (!v.uri.empty() && v.uri != "about:blank") v.pending = v.uri;
+    if (index == kUi) { ui::Reset(); g.uiLoaded = false; }
+    CloseView(index);
+    CreateView(index);
+#else
+    (void)index;
+    (void)generation;
 #endif
 }
 void UniversalReset() {
@@ -610,11 +658,7 @@ void ResizeContent(const RECT& rect) {
 void ResizeHost() {
 #ifdef CRONQ_WEBVIEW2
     if (g_shuttingDown) return;
-    if (g.views[kUi].controller) {
-        RECT rc{};
-        GetClientRect(g_parent, &rc);
-        Check(g.views[kUi].controller->put_Bounds(rc), "UI put_Bounds");
-    }
+    UpdateLayout();
     for (auto& v : g.views)
         if (v.controller)
             Check(v.controller->NotifyParentWindowPositionChanged(), "NotifyParentWindowPositionChanged");

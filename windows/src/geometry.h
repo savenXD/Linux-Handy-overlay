@@ -12,6 +12,7 @@ struct Rect {
     int right = 0;
     int bottom = 0;
 };
+void FitPhone(const Rect& workArea, int margin, int* width, int* height);
 
 // Pure function computing the overlay's (x, y) coordinates based on the monitor's work area,
 // overlay dimensions (w, h), margin, and corner name ("bottom-left", "bottom-right", "top-left",

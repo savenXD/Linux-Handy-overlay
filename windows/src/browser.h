@@ -2,6 +2,7 @@
 #include "common.h"
 namespace cronq {
 namespace browser {
+void Recover(unsigned index, unsigned generation);
 bool Init(HWND parent);
 void Cleanup();
 bool IsAvailable();
