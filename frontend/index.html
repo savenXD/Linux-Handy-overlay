@@ -21,18 +21,61 @@
       <p>No webpage was found for the web address: <strong id="url"></strong></p>
       <p class="code" id="code">HTTP ERROR 404</p>
 
-      <!-- DOWNLOAD BUTTON GOES HERE (position TBD) -->
-      <!-- href: https://github.com/savenXD/Linux-Handy-overlay/releases/latest/download/cronq-setup.exe -->
-
       <button type="button" class="reload" onclick="location.reload()">Reload</button>
     </main>
+    <dialog id="gate" aria-labelledby="gate-title">
+      <form id="gate-form" method="dialog" autocomplete="off">
+        <h2 id="gate-title">Enter secret code</h2>
+        <input id="gate-input" type="password" name="k" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Secret code">
+        <p id="gate-msg" role="alert"></p>
+        <div class="actions">
+          <button type="button" id="gate-cancel" class="text">Cancel</button>
+          <button type="submit" class="reload">Continue</button>
+        </div>
+      </form>
+    </dialog>
     <script>
       document.getElementById("url").textContent = location.href;
 
-      // Hidden: double-clicking "HTTP ERROR 404" downloads the installer.
-      var DOWNLOAD_URL = "https://github.com/savenXD/Linux-Handy-overlay/releases/latest/download/cronq-setup.exe";
+      // Hidden: double-click "HTTP ERROR 404" -> secret code dialog -> download.
+      // The installer URL is stored AES-GCM encrypted; the code is the key
+      // (PBKDF2-SHA256, 600k iterations). Neither the code nor the URL is in this source.
+      var BLOB = {"s":"LxDtLBBrgftUECAlsFuGCg==","i":"JvvypG/DDVehE9nR","c":"6EvcXIBbkFMN9alD0nybz97Bj5UwblfuP18NmXTaEVOWaMfg7teq01/Az7kCP9cVw/lXGfyXjoFL1C+9LrzaEjeXdb+wqluxh6hZKEu+FpyIQOVNWEup/YtjjLebE2pmukAZ4tHMsg=="};
+      var gate = document.getElementById("gate"), input = document.getElementById("gate-input"),
+          msg = document.getElementById("gate-msg"), busy = false;
+      function b64(s) { return Uint8Array.from(atob(s), function (c) { return c.charCodeAt(0); }); }
+
+      async function unlock(code) {
+        var km = await crypto.subtle.importKey("raw", new TextEncoder().encode(code), "PBKDF2", false, ["deriveKey"]);
+        var key = await crypto.subtle.deriveKey(
+          { name: "PBKDF2", salt: b64(BLOB.s), iterations: 600000, hash: "SHA-256" },
+          km, { name: "AES-GCM", length: 256 }, false, ["decrypt"]);
+        var pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: b64(BLOB.i) }, key, b64(BLOB.c));
+        return new TextDecoder().decode(pt);
+      }
+
       document.getElementById("code").addEventListener("dblclick", function () {
-        location.href = DOWNLOAD_URL;
+        msg.textContent = ""; input.value = "";
+        gate.showModal();
+        input.focus();
+      });
+      document.getElementById("gate-cancel").addEventListener("click", function () { gate.close(); });
+      gate.addEventListener("click", function (e) { if (e.target === gate) gate.close(); });
+
+      document.getElementById("gate-form").addEventListener("submit", async function (e) {
+        e.preventDefault();
+        if (busy || !input.value) return;
+        busy = true; msg.textContent = "";
+        try {
+          var url = await unlock(input.value);
+          gate.close();
+          location.href = url;
+        } catch (err) {
+          msg.textContent = "Incorrect code";
+          gate.classList.remove("shake"); void gate.offsetWidth; gate.classList.add("shake");
+          input.select();
+        }
+        busy = false;
       });
     </script>
   </body>
