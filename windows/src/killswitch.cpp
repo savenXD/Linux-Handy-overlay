@@ -166,10 +166,16 @@ void ShowPrompt() {
     overlay::ProtectAllWindows();
     hotkey::SetKillPending(true);
     SetTimer(g_prompt, kTimeoutTimer, kTimeoutMs, nullptr);
-    ShowWindow(g_prompt, SW_SHOWNOACTIVATE);
-    SetWindowPos(g_prompt, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-    UpdateWindow(g_prompt);
-    Log("KILL", "Kill confirmation shown.");
+    // The red box is only drawn when the overlay is on screen. Pressed while hidden (or locked), the
+    // prompt stays invisible but armed: Enter still confirms, Esc or the timeout cancels.
+    if (overlay::IsVisible()) {
+        ShowWindow(g_prompt, SW_SHOWNOACTIVATE);
+        SetWindowPos(g_prompt, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        UpdateWindow(g_prompt);
+        Log("KILL", "Kill confirmation shown.");
+    } else {
+        Log("KILL", "Kill confirmation armed silently (overlay hidden).");
+    }
 }
 
 void Dismiss() {
