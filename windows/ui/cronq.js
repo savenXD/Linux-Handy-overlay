@@ -60,15 +60,13 @@
       }
       const name = ['Dark','Light','Camo Light','Camo Dark'][state.appearance] || 'Camo Light';
       $('appearance').textContent = name;
-      $('appearance').title = `Appearance: ${name}. Alt+C toggles camouflage; Alt+T switches Light/Dark`;
-      $('appearance').setAttribute('aria-label', $('appearance').title);
+      // No `title` tooltips anywhere: they are native windows that screen-capture exclusion cannot hide.
+      $('appearance').setAttribute('aria-label', `Appearance: ${name}. Alt+C toggles camouflage; Alt+T switches Light/Dark`);
     }
     for (const app of ['home','browser','chatgpt','ghost']) $(app).hidden = app !== state.app;
     $('mode').className = `nav-pill ${state.mode === 'exclusive' ? 'pill-excl' : 'pill-mirror'}`;
-    $('mode').title = state.mode === 'exclusive' ? 'Exclusive (click for Mirror)' : 'Mirror (click for Exclusive)';
     $('mode').setAttribute('aria-label', state.mode === 'exclusive' ? 'Exclusive' : 'Mirror');
     $('ghost-pill').className = `nav-pill ${state.ghost ? 'pill-ghost' : 'pill-solid'}`;
-    $('ghost-pill').title = state.ghost ? 'Ghost (click for Solid)' : 'Solid (click for Ghost)';
     $('ghost-pill').setAttribute('aria-label', state.ghost ? 'Ghost' : 'Solid');
     $('grab').hidden = state.grab !== 'failed';
     $('back').disabled = state.app === 'home';
@@ -78,7 +76,7 @@
     $('progress').hidden = !state.loading;
     $('progress').firstElementChild.style.width = `${Math.max(0,Math.min(1,state.progress))*100}%`;
     icon($('reload'), state.loading ? 'icon-stop' : 'icon-reload');
-    $('reload').title = state.loading ? 'Stop loading' : 'Reload page';
+    $('reload').setAttribute('aria-label', state.loading ? 'Stop loading' : 'Reload page');
     $('popup').hidden = !state.popup;
     if (pendingUrlFocus && state.app === 'browser') { pendingUrlFocus = false; $('url').focus(); }
     slot();

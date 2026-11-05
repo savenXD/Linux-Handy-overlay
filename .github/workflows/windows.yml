@@ -40,8 +40,8 @@ jobs:
         run: ctest --test-dir windows/build -C Release --output-on-failure
       - name: Installer script regression
         run: pwsh -NoProfile -File windows/tests/install_script_test.ps1
-      - name: Kill switch script test
-        run: pwsh -NoProfile -File windows/tests/killswitch_script_test.ps1
+      - name: Kill switch purge test
+        run: pwsh -NoProfile -File windows/tests/purge_test.ps1 -BinDir windows/build/Release
       - name: Stage distribution
         run: pwsh windows/installer/make-dist.ps1
       - name: Install Inno Setup

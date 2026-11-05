@@ -3,6 +3,8 @@
 #include <vector>
 
 #include "hotkey.h"
+#include "lock_logic.h"
+#include "purge.h"
 #include "overlay.h"
 
 namespace cronq {
@@ -12,7 +14,6 @@ namespace {
 
 constexpr wchar_t kClassName[] = L"CronqKillPrompt";
 constexpr UINT_PTR kTimeoutTimer = 1;
-constexpr UINT kTimeoutMs = 15000;
 
 HWND g_prompt = nullptr;
 bool g_classRegistered = false;
@@ -79,61 +80,6 @@ LRESULT CALLBACK PromptProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     }
 }
 
-std::wstring ExeDir() {
-    wchar_t path[MAX_PATH * 2] = {};
-    DWORD n = GetModuleFileNameW(nullptr, path, (DWORD)(sizeof(path) / sizeof(path[0])));
-    std::wstring p(path, n);
-    size_t slash = p.find_last_of(L"\\/");
-    return slash == std::wstring::npos ? L"." : p.substr(0, slash);
-}
-
-bool LaunchCleanup() {
-    const std::wstring installDir = ExeDir();
-    const std::wstring script = installDir + L"\\killswitch.ps1";
-    if (GetFileAttributesW(script.c_str()) == INVALID_FILE_ATTRIBUTES) {
-        LogErr("KILL", "killswitch.ps1 not found next to the executable; refusing to quit.");
-        return false;
-    }
-    wchar_t tmp[MAX_PATH] = {};
-    GetTempPathW(MAX_PATH, tmp);
-    // The script runs from %TEMP% because it deletes the install folder it came from.
-    std::wstring copy = std::wstring(tmp) + L"cronq-kill-" + std::to_wstring(GetTickCount64()) + L".ps1";
-    if (!CopyFileW(script.c_str(), copy.c_str(), FALSE)) {
-        LogErr("KILL", "Could not copy cleanup script (%lu).", GetLastError());
-        return false;
-    }
-    // Absolute path: never let a powershell.exe next to Cronq or in %TEMP% be picked up by the search order.
-    wchar_t sys[MAX_PATH] = {};
-    GetSystemDirectoryW(sys, MAX_PATH);
-    const std::wstring ps = std::wstring(sys) + L"\\WindowsPowerShell\\v1.0\\powershell.exe";
-    std::wstring cmd = L"\"" + ps + L"\" -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File \"" +
-                       copy + L"\" -InstallDir \"" + installDir + L"\" -ParentPid " +
-                       std::to_wstring(GetCurrentProcessId());
-    std::vector<wchar_t> buf(cmd.begin(), cmd.end());
-    buf.push_back(0);
-    STARTUPINFOW si = {};
-    si.cb = sizeof(si);
-    si.dwFlags = STARTF_USESHOWWINDOW;
-    si.wShowWindow = SW_HIDE;
-    PROCESS_INFORMATION pi = {};
-    DWORD flags = CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP | CREATE_BREAKAWAY_FROM_JOB;
-    BOOL ok = CreateProcessW(nullptr, buf.data(), nullptr, nullptr, FALSE, flags, nullptr, tmp, &si, &pi);
-    if (!ok) {  // the surrounding job may forbid breakaway
-        buf.assign(cmd.begin(), cmd.end());
-        buf.push_back(0);
-        ok = CreateProcessW(nullptr, buf.data(), nullptr, nullptr, FALSE, flags & ~CREATE_BREAKAWAY_FROM_JOB,
-                            nullptr, tmp, &si, &pi);
-    }
-    if (!ok) {
-        LogErr("KILL", "Could not start cleanup script (%lu).", GetLastError());
-        DeleteFileW(copy.c_str());
-        return false;
-    }
-    CloseHandle(pi.hThread);
-    CloseHandle(pi.hProcess);
-    return true;
-}
-
 }  // namespace
 
 bool IsPending() { return g_prompt != nullptr; }
@@ -165,10 +111,12 @@ void ShowPrompt() {
     }
     overlay::ProtectAllWindows();
     hotkey::SetKillPending(true);
-    SetTimer(g_prompt, kTimeoutTimer, kTimeoutMs, nullptr);
     // The red box is only drawn when the overlay is on screen. Pressed while hidden (or locked), the
-    // prompt stays invisible but armed: Enter still confirms, Esc or the timeout cancels.
-    if (overlay::IsVisible()) {
+    // prompt stays invisible but armed for 5 s: Enter confirms; Esc, any other key or the timeout cancels.
+    const bool visible = overlay::IsVisible();
+    SetTimer(g_prompt, kTimeoutTimer,
+             visible ? lock_logic::kKillTimeoutVisibleMs : lock_logic::kKillTimeoutHiddenMs, nullptr);
+    if (visible) {
         ShowWindow(g_prompt, SW_SHOWNOACTIVATE);
         SetWindowPos(g_prompt, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
         UpdateWindow(g_prompt);
@@ -190,9 +138,9 @@ void Confirm() {
     if (!g_prompt) return;
     Dismiss();
     Log("KILL", "Kill confirmed; starting cleanup.");
-    if (!LaunchCleanup()) {
+    if (!purge::Launch()) {
         overlay::Show();
-        overlay::ShowToast("Kill failed: cleanup script missing");
+        overlay::ShowToast("Kill failed: could not start the cleanup");
         return;
     }
     HWND h = overlay::Hwnd();

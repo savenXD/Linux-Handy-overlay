@@ -16,6 +16,9 @@
 #include "snap.h"
 #include "version.h"
 #include "crash_handler.h"
+#include "recovery_logic.h"
+#include "purge.h"
+#include "update.h"
 #include "theme.h"
 
 #include <shellapi.h>
@@ -158,7 +161,8 @@ int RunDaemon(bool forceVisible) {
     if (!overlay::Init(startVisible)) {
         LogErr("MAIN", "Failed to initialize overlay window.");
         ipc::StopServer();
-        return 1;
+        // Capture protection unavailable: restarting cannot fix it, so tell the supervisor to stop.
+        return overlay::RefusedForCapture() ? (int)recovery_logic::kExitNoRestart : 1;
     }
     ipc::SetTarget(overlay::Hwnd());
 
@@ -211,30 +215,46 @@ int RunDaemon(bool forceVisible) {
 
 // ---------------------------------------------------------------- supervisor
 
-void AppendCrashLog(DWORD code) {
+void AppendCrashLog(DWORD code, int64_t delayMs) {
     std::wstring path = DataDir() + L"\\crash.log";
     FILE* f = _wfopen(path.c_str(), L"a");
     if (!f) return;
     SYSTEMTIME t;
     GetLocalTime(&t);
-    fprintf(f, "[%04d-%02d-%02d %02d:%02d:%02d] Cronq crashed/exited with code %lu. Restarting in 2s...\n",
-            t.wYear, t.wMonth, t.wDay, t.wHour, t.wMinute, t.wSecond, (unsigned long)code);
+    fprintf(f, "[%04d-%02d-%02d %02d:%02d:%02d] Cronq crashed/exited with code %lu. Restarting in %llds...\n",
+            t.wYear, t.wMonth, t.wDay, t.wHour, t.wMinute, t.wSecond, (unsigned long)code,
+            (long long)(delayMs / 1000));
     fclose(f);
 }
 
 int RunSupervisor(const std::vector<std::string>& passthrough) {
     HANDLE mutex = CreateMutexW(nullptr, TRUE, L"Local\\CronqSupervisor");
-    if (mutex && GetLastError() == ERROR_ALREADY_EXISTS) return 0;  // another supervisor is already watching
+    if (mutex && GetLastError() == ERROR_ALREADY_EXISTS) {
+        // Another supervisor is already watching; a Start Menu launch still means "show it".
+        std::string resp;
+        if (HasShowFlag(passthrough)) ipc::Send("SHOW", &resp);
+        CloseHandle(mutex);
+        return 0;
+    }
+    // Quick repeated failures back off 2 s, 4 s ... 60 s instead of restarting every 2 s forever.
+    recovery_logic::Backoff backoff(2000, 4000, 60000, 60000);
 
-    std::wstring args = L"--daemon";
-    for (const std::string& a : passthrough) args += L" " + Quote(Widen(a));
+    // Only the first launch honours --show: a crash restart must not pop the overlay up on screen.
+    std::wstring firstArgs = L"--daemon", restartArgs = L"--daemon";
+    for (const std::string& a : passthrough) {
+        firstArgs += L" " + Quote(Widen(a));
+        if (a != "--show" && a != "show") restartArgs += L" " + Quote(Widen(a));
+    }
     std::wstring exe = OverlayExe();
 
-    for (;;) {
+    for (bool first = true;; first = false) {
+        const std::wstring& args = first ? firstArgs : restartArgs;
         HANDLE proc = nullptr;
         if (!Spawn(exe, args, 0, &proc)) {
-            AppendCrashLog(GetLastError());
-            Sleep(2000);
+            const DWORD error = GetLastError();
+            const int64_t delay = backoff.Next(NowUs() / 1000);
+            AppendCrashLog(error, delay);
+            Sleep(static_cast<DWORD>(delay));
             continue;
         }
         WaitForSingleObject(proc, INFINITE);
@@ -242,10 +262,11 @@ int RunSupervisor(const std::vector<std::string>& passthrough) {
         GetExitCodeProcess(proc, &code);
         CloseHandle(proc);
 
-        // Clean exit (including `cronq kill` and Ctrl+C): stop supervising.
-        if (code == 0 || code == 0xC000013A /* STATUS_CONTROL_C_EXIT */) break;
-        AppendCrashLog(code);
-        Sleep(2000);
+        // Clean exit (`cronq kill`, Ctrl+C) or a failure a restart cannot fix: stop supervising.
+        if (!recovery_logic::ShouldRestart(code)) break;
+        const int64_t delay = backoff.Next(NowUs() / 1000);
+        AppendCrashLog(code, delay);
+        Sleep(static_cast<DWORD>(delay));
     }
     if (mutex) CloseHandle(mutex);
     return 0;
@@ -297,6 +318,7 @@ int Help(const char* prog) {
     printf("  --ghost-write                 Trigger Ghost Writer keyboard injection\n");
     printf("  --paste                       Trigger paste into overlay (entry or active webview)\n");
     printf("  --reload-config               Reload configuration from config.ini\n");
+    printf("  update [--yes]                Check GitHub for a newer version and install it (manual only)\n");
     printf("  --version                     Print the version\n");
     printf("  --help, -h                    Show this help text\n");
     printf("Windows only:\n");
@@ -438,6 +460,10 @@ int RunCli(const std::vector<std::string>& args) {
             return Remote("FULLSCREEN", nullptr);
         } else if (is("--default-size")) {
             return Remote("DEFAULT_SIZE", nullptr);
+        } else if (is("update") || is("--update")) {
+            bool yes = false;
+            for (const std::string& o : args) yes = yes || o == "--yes" || o == "-y";
+            return update::Run(yes);
         } else if (is("--version")) {
             printf("%s\n", kVersion);
             return 0;
@@ -456,6 +482,13 @@ int main() {
 #ifdef CRONQ_CONSOLE
     SetConsoleOutputCP(CP_UTF8);
 #endif
+
+    // Kill-switch purge helper (a copy in %TEMP%): --purge <installDir> <parentPid>.
+    // --purge-dry-run <installDir> only prints what would be removed.
+    if (args.size() >= 2 && (args[0] == "--purge" || args[0] == "--purge-dry-run")) {
+        const DWORD parent = args.size() >= 3 ? static_cast<DWORD>(strtoul(args[2].c_str(), nullptr, 10)) : 0;
+        return purge::Run(Widen(args[1]), parent, args[0] == "--purge-dry-run");
+    }
 
     for (size_t i = 0; i < args.size(); i++) {
         if (args[i] == "--supervise") {

@@ -1,12 +1,12 @@
-# Cronq v1.1.1 for Windows
+# Cronq v1.2.0 for Windows
 
 Cronq is a floating companion window shaped like a phone (default 360x640 pixels, rounded corners, dark theme) that stays visible on top of other software—including borderless-fullscreen apps and games—without ever stealing keyboard focus. Inside it: a mobile browser, ChatGPT with persistent login sessions, Ghost Typer for human-like automated typing, clean screen captures (Snap) excluding the overlay, and the ability to type into the overlay without losing focus on whatever app you are using underneath.
 
 The Windows release is a native C++17 implementation using Win32 and Microsoft Edge WebView2.
-Version 1.1.1 includes Light/Dark themes, transparent camouflage, temporary locking, and saved corner docking.
+Version 1.2.0 is a reliability, privacy and performance release on top of the 1.1 features (Light/Dark themes, camouflage, locking, corner docking, capture protection).
 Native Windows checks cover transparent text rendering, theme persistence, lock behavior, shortcuts,
 and docking across a restart. ChatGPT styling is tested with a local fixture; live site changes and
-application-specific behavior can still require adjustments. See [release notes](v1.1.1.md) and
+application-specific behavior can still require adjustments. See [release notes](v1.2.0.md) and
 [PARITY.md](PARITY.md) for evidence and limits.
 
 [Download the latest Windows installer](https://github.com/savenXD/Linux-Handy-overlay/releases/latest/download/cronq-setup.exe).
@@ -63,6 +63,7 @@ cronq --app chatgpt    # Switch to ChatGPT view
 cronq --app ghost      # Switch to Ghost Typer view
 cronq snap             # Capture screenshot (excluding overlay) to clipboard and disk
 cronq kill             # Terminate running background overlay and supervisor
+cronq update           # Check GitHub for a newer version; verifies the download's SHA-256, then runs setup
 ```
 
 ---
@@ -70,6 +71,9 @@ cronq kill             # Terminate running background overlay and supervisor
 ## Global Keyboard Shortcuts
 
 All global shortcuts use the **Alt + key** chord. The focused application does not lose focus, and hotkeys are swallowed cleanly without opening menu bars.
+
+While the overlay is **hidden**, only Alt+X, Alt+P, Alt+W, Alt+K and Alt+Shift+K belong to Cronq. The window-layout shortcuts
+(Alt+G/A/S/F/D/M/C/T and Alt+Left/Right) then reach your applications normally, so for example Alt+Left stays "Back" in your browser.
 
 | Shortcut | Action | Configurable Key | Default |
 | --- | --- | --- | --- |
@@ -79,7 +83,7 @@ All global shortcuts use the **Alt + key** chord. The focused application does n
 | **Alt+S** | Increase overlay opacity by 10% (maximum 100%) | *fixed* | `s` |
 | **Alt+F** | Toggle Fullscreen mode | *fixed* | `f` |
 | **Alt+D** | Reset to default size (360x640) and corner position | *fixed* | `d` |
-| **Alt+P** | Snap screenshot (saved to `Pictures\cronq` & clipboard) | `snap_key` | `p` |
+| **Alt+P** | Snap screenshot of the screen you are working on (clipboard, and `%LOCALAPPDATA%\cronq\snaps`) | `snap_key` | `p` |
 | **Alt+M** | Cycle typing mode: Mirror ⇄ Exclusive | `mode_key` | `m` |
 | **Alt+W** | Ghost Writer start / cancel typing | `ghost_writer_key` | `w` |
 | **Alt+C** | Toggle minimal camouflage; press again to restore the previous Light/Dark mode | *fixed* | `c` |
@@ -88,14 +92,15 @@ All global shortcuts use the **Alt + key** chord. The focused application does n
 | **Alt+Right Arrow** | Instantly dock bottom-right and save the corner for future launches | *fixed* | Right Arrow |
 | **Alt+K** | **Lock**: hide the overlay and disable every other Cronq shortcut. No confirmation. | *fixed* | `k` |
 | **Alt+K+X** | **Unlock** (hold Alt and K, then X, or X then K): shortcuts work again and the overlay reappears | *fixed* | `k`+`x` |
-| **Alt+Shift+K** | **Kill switch**: on-screen prompt; **Enter** confirms, **Esc** (or 15 s of no answer) cancels | *fixed* | `k` |
+| **Alt+Shift+K** | **Kill switch**: on-screen prompt; **Enter** confirms; **Esc**, any other key, or 15 s of no answer cancels. While hidden the prompt is invisible and expires after 5 s | *fixed* | `k` |
 
 ### Kill switch (Alt+Shift+K)
-On **Enter**, Cronq quits and a detached cleanup script (`killswitch.ps1`, run from `%TEMP%`) removes it from the PC:
-all Cronq processes (including the supervisor and WebView2 helpers), the autostart Run entries, any Startup-folder
-shortcut or scheduled task named cronq, Start Menu/Desktop shortcuts, the user PATH entry, the installer's
-uninstall registry entry, the install folder, `%LOCALAPPDATA%\cronq`, `%APPDATA%\cronq`, `Pictures\cronq`
-(screenshots) and leftover `cronq*` files in `%TEMP%`. It cannot be undone; reinstall by downloading the setup again.
+On **Enter**, Cronq quits and a detached native cleanup (a copy of `cronqw.exe` run from `%TEMP%` with `--purge`;
+no PowerShell, so it also works where scripts are blocked) removes:
+all Cronq processes (including the supervisor and WebView2 helpers), the autostart Run entries, Startup-folder,
+Start Menu and Desktop shortcuts, the user PATH entry, the installer's uninstall registry entry, the install folder,
+`%LOCALAPPDATA%\cronq` (logins, logs, snaps), `%APPDATA%\cronq` (settings), `Pictures\cronq` (snaps from older
+versions) and leftover `cronq*` files in `%TEMP%`. Windows' own records of programs that ran are not affected. It cannot be undone; reinstall by downloading the setup again.
 For portable/developer builds outside `%LOCALAPPDATA%\Programs\Cronq` only Cronq's own files are deleted, never the whole folder.
 Lock state is not saved: restarting Cronq starts unlocked.
 
@@ -109,6 +114,14 @@ Cronq excludes its window from screen capture with `WDA_EXCLUDEFROMCAPTURE`. You
 full-screen recordings, screen sharing and screenshots do not contain it. It is on by default; there is no
 hotkey. To turn it off, set `hide_from_capture = false` under `[Privacy]` in `config.ini`.
 Needs Windows 10 2004+. It does not hide your other windows or a physical camera.
+
+Windows can only exclude windows that Cronq itself owns. Menus, tooltips, prompts and dialogs that the
+embedded browser (WebView2) would draw belong to a separate Microsoft process and would be visible to
+recorders, so Cronq turns them off: no right-click menu, DevTools, browser shortcut keys (find, print),
+autofill or password-save bubbles, site permission prompts (they are denied; ChatGPT may read the
+clipboard), alert/confirm dialogs (dismissed), download bubble (files still go to Downloads) or `title`
+tooltips. Still visible to recorders: native `<select>` dropdown lists on websites, and the Windows file
+picker (ChatGPT "Attach file"). Paste an image or Snap (Alt+P) instead of attaching.
 
 ### Appearance: Dark, Light and Camouflage
 
@@ -233,7 +246,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File windows/installer/uninstall.
 - **Stay on top:** Uses a guarded topmost watcher for borderless-fullscreen apps and other topmost windows. Test your games on Windows; exclusive fullscreen is unsupported.
 - **Focus preservation:** Uses non-activating windows and restores external focus if a child view activates. Native WebView2 interactions still need Windows verification.
 - **Clean screenshot captures:** Uses Windows Display Affinity (`WDA_EXCLUDEFROMCAPTURE`) so screenshots captured via Alt+P or `--snap` do not contain the overlay window.
-- **Crash supervision:** `cronqw.exe --supervise` automatically restarts the overlay within 2 seconds if an unexpected fault occurs and records restart history in `crash.log`. An unhandled fault also writes `crash-<timestamp>-<pid>.log` with exception, module offset, and x64 registers.
+- **Crash supervision:** `cronqw.exe --supervise` (used by autostart, the Start Menu shortcut and setup) restarts the overlay after an unexpected fault: after 2 s, then backing off 4, 8 ... up to 60 s if it keeps failing, and it stops when a restart cannot help. Restarts come back hidden. History goes to `crash.log`; a fault also writes `crash-<timestamp>-<pid>.log` (exception, module offset, x64 registers) and a small `.dmp` minidump (newest 3 kept). WebView2 failures recover the same way, and a browser that fails to start is retried automatically.
+- **Lightweight while hidden:** the system-wide mouse hook is removed, web views are throttled (ChatGPT can finish an answer; the browser page is suspended) and the stay-on-top watcher stops. The browser view is only created the first time you open it.
+- **Private logs:** `cronq.log` records hosts, not full URLs, never other apps' window titles or typed text, and rotates at 2 MB while running.
 - **DPI scaling:** Default phone dimensions scale with monitor DPI and fit within 75% of the usable screen height, preserving their aspect ratio. Home stays compact; expanded views honor the configured height. Corner positioning stays within the work area, above the taskbar. Fullscreen and manual resizing use the current monitor.
 - **Browser reliability:** UI, browser, ChatGPT, and sign-in popups have separate native host windows so the UI cannot cover web content after resizing or switching apps. Renderer failures recreate the affected view; browser-process failures recreate the environment with the same saved profile. ChatGPT and sign-in use the current WebView2 browser identity; the configured mobile user agent applies to the Chrome view.
 
@@ -253,7 +268,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File windows/installer/uninstall.
 | `WebView2 unavailable` error in log | Microsoft Edge WebView2 runtime missing | Run the installer setup or download runtime from Microsoft: `https://go.microsoft.com/fwlink/p/?LinkId=2124703` |
 | Text not typed into target app | Target app is running as Administrator | Run target as normal user or follow `windows/UIACCESS.md` to enable UIAccess build |
 | Ghost mode clicks hitting overlay | Click-through disabled | Press **Alt+G** to enable transparent click-through mode |
-| Antivirus false positive warning | Unsigned executable heuristic | Check the detection and build provenance; release builds should be signed with a trusted code-signing certificate |
+| Antivirus false positive warning | Unsigned executable heuristic | Releases are not code-signed. Check the download against `SHA256SUMS.txt` on the release page (`cronq update` does this automatically) |
 
 ---
 
@@ -340,4 +355,4 @@ Use Windows 10 22H2 and Windows 11 as a standard user. These steps cover paths W
     not produce sustained growth. Inspect `%LOCALAPPDATA%\cronq` logs and test log rotation.
 18. **Uninstall.** Normal uninstall retains settings/logins, removes program files, shortcut, Run entry and
     PATH entry added by setup. Purge is unchecked initially; selecting it removes roaming/local Cronq data.
-    `Pictures\cronq` screenshots are preserved. Reinstall and verify the retained profile.
+    Snaps in `%LOCALAPPDATA%\cronq\snaps` are removed only by a purge. Reinstall and verify the retained profile.

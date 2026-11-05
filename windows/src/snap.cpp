@@ -7,6 +7,7 @@
 #include <chrono>
 #include <ctime>
 #include <fstream>
+#include <memory>
 #include <vector>
 
 #include "com_ptr.h"
@@ -25,24 +26,24 @@ namespace {
 bool g_isSnapping = false;
 bool g_wasVisibleDuringSnap = false;
 bool g_usedAffinity = false;
+HANDLE g_worker = nullptr;
+
+// Encoding a multi-monitor capture to PNG and writing it can take a second; it runs on a worker
+// thread so the overlay never freezes. The UI thread then publishes the result to the clipboard.
+struct SnapJob {
+    int width = 0, height = 0;
+    std::vector<uint8_t> bgra, png;
+    bool save = false, encoded = false;
+    int keepCount = 20;
+    HWND notify = nullptr;
+};
 
 UINT g_pngClipboardFormat = 0;
 
-std::wstring GetPicturesCronqDir() {
-    PWSTR path = nullptr;
-    std::wstring dir;
-    if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Pictures, 0, nullptr, &path)) && path) {
-        dir = std::wstring(path) + L"\\cronq";
-        CoTaskMemFree(path);
-    } else {
-        wchar_t profile[MAX_PATH];
-        if (GetEnvironmentVariableW(L"USERPROFILE", profile, MAX_PATH)) {
-            dir = std::wstring(profile) + L"\\Pictures\\cronq";
-        }
-    }
-    if (!dir.empty()) {
-        CreateDirectoryW(dir.c_str(), nullptr);
-    }
+// Snaps live in %LOCALAPPDATA%\cronq\snaps: unlike Pictures, it is never synced to OneDrive.
+std::wstring SnapDir() {
+    std::wstring dir = DataDir() + L"\\snaps";
+    CreateDirectoryW(dir.c_str(), nullptr);
     return dir;
 }
 
@@ -120,7 +121,61 @@ void CopyToClipboard(int width, int height, const uint8_t* bgra, const std::vect
     CloseClipboard();
 }
 
+DWORD WINAPI EncodeWorker(LPVOID param) {
+    auto* job = static_cast<SnapJob*>(param);
+    const bool threaded = job->notify != nullptr;
+    HRESULT com = threaded ? CoInitializeEx(nullptr, COINIT_MULTITHREADED) : S_FALSE;
+    job->encoded = image_codec::EncodePng(job->width, job->height, job->bgra.data(), &job->png);
+    if (job->save && job->encoded) {
+        std::wstring dir = SnapDir();
+        SYSTEMTIME st;
+        GetLocalTime(&st);
+        char stamp[64];
+        snprintf(stamp, sizeof(stamp), "%04d%02d%02d-%02d%02d%02d", st.wYear, st.wMonth, st.wDay, st.wHour,
+                 st.wMinute, st.wSecond);
+        std::wstring filePath = dir + L"\\" + Widen(snap_logic::PickSnapName(ListSnapPngFiles(dir), stamp));
+        std::ofstream f(filePath.c_str(), std::ios::binary);
+        if (f.is_open()) {
+            f.write(reinterpret_cast<const char*>(job->png.data()), static_cast<std::streamsize>(job->png.size()));
+            f.close();
+            if (!f) {
+                LogErr("SNAP", "Screenshot write failed");
+                DeleteFileW(filePath.c_str());
+            } else {
+                Log("SNAP", "Saved screenshot");
+                std::wstring latestPath = DataDir() + L"\\latest_snap.png";
+                if (!CopyFileW(filePath.c_str(), latestPath.c_str(), FALSE))
+                    LogErr("SNAP", "Cannot update latest screenshot (%lu)", GetLastError());
+            }
+        }
+        for (const auto& oldName : snap_logic::FilesToPrune(ListSnapPngFiles(dir), job->keepCount))
+            DeleteFileW((dir + L"\\" + Widen(oldName)).c_str());
+    }
+    if (threaded) {
+        if (SUCCEEDED(com)) CoUninitialize();
+        if (!PostMessageW(job->notify, WM_CRONQ_SNAP_DONE, 0, reinterpret_cast<LPARAM>(job))) delete job;
+    }
+    return 0;
+}
+
 }  // namespace
+
+// UI thread: the worker finished; publish to the clipboard and update the camera button.
+void OnEncoded(void* param) {
+    std::unique_ptr<SnapJob> job(static_cast<SnapJob*>(param));
+    if (g_worker) {
+        WaitForSingleObject(g_worker, INFINITE);  // it already posted: about to return
+        CloseHandle(g_worker);
+        g_worker = nullptr;
+    }
+    CopyToClipboard(job->width, job->height, job->bgra.data(), job->png);
+    ui::PostToUi("{\"type\":\"snap-state\",\"state\":\"done\"}");
+    if (job->encoded)
+        SetTimer(overlay::Hwnd(), kSnapRevertTimerId, 1500, nullptr);
+    else
+        ui::PostToUi("{\"type\":\"snap-state\",\"state\":\"camera\"}");
+    g_isSnapping = false;
+}
 
 void OnSnapRevert() {
     KillTimer(overlay::Hwnd(), kSnapRevertTimerId);
@@ -139,8 +194,11 @@ void OnSnapTimeout() {
         rw = GetSystemMetrics(SM_CXVIRTUALSCREEN);
         rh = GetSystemMetrics(SM_CYVIRTUALSCREEN);
     } else {
+        // The screen the user is working on: the foreground window's monitor (primary if none).
+        HWND active = GetForegroundWindow();
         POINT ptZero = {0, 0};
-        HMONITOR hMon = MonitorFromPoint(ptZero, MONITOR_DEFAULTTOPRIMARY);
+        HMONITOR hMon = active && active != overlay::Hwnd() ? MonitorFromWindow(active, MONITOR_DEFAULTTOPRIMARY)
+                                                            : MonitorFromPoint(ptZero, MONITOR_DEFAULTTOPRIMARY);
         MONITORINFO mi;
         ZeroMemory(&mi, sizeof(mi));
         mi.cbSize = sizeof(mi);
@@ -220,65 +278,20 @@ void OnSnapTimeout() {
 
     Log("WINDOW", "Captured snap: %dx%d at (%d, %d)", rw, rh, rx, ry);
 
-    // Encode to PNG
-    std::vector<uint8_t> pngBytes;
-    const bool encoded = image_codec::EncodePng(rw, rh, bgra.data(), &pngBytes);
-
-    // Copy to clipboard
-    CopyToClipboard(rw, rh, bgra.data(), pngBytes);
-
-    // Save to disk if enabled
-    if (cfg.snapSave) {
-        std::wstring picDir = GetPicturesCronqDir();
-        if (!picDir.empty()) {
-            SYSTEMTIME st;
-            GetLocalTime(&st);
-            char stamp[64];
-            snprintf(stamp, sizeof(stamp), "%04d%02d%02d-%02d%02d%02d", st.wYear, st.wMonth, st.wDay,
-                     st.wHour, st.wMinute, st.wSecond);
-
-            auto existingFiles = ListSnapPngFiles(picDir);
-            std::string snapName = snap_logic::PickSnapName(existingFiles, stamp);
-            std::wstring filePath = picDir + L"\\" + Widen(snapName);
-
-            if (!pngBytes.empty()) {
-                std::ofstream f(filePath.c_str(), std::ios::binary);
-                if (f.is_open()) {
-                    f.write(reinterpret_cast<const char*>(pngBytes.data()), pngBytes.size());
-                    f.close();
-                    if (!f) {
-                        LogErr("SNAP", "Screenshot write failed");
-                        DeleteFileW(filePath.c_str());
-                    } else
-                        Log("WINDOW", "Saved screenshot to %s", Narrow(filePath).c_str());
-
-                    // Copy to %LOCALAPPDATA%\cronq\latest_snap.png
-                    std::wstring latestPath = DataDir() + L"\\latest_snap.png";
-                    if (f && !CopyFileW(filePath.c_str(), latestPath.c_str(), FALSE))
-                        LogErr("SNAP", "Cannot update latest screenshot (%lu)", GetLastError());
-                }
-            }
-
-            // Prune old snapshots exceeding keep count
-            existingFiles = ListSnapPngFiles(picDir);
-            auto toPrune = snap_logic::FilesToPrune(existingFiles, cfg.snapKeepCount);
-            for (const auto& oldName : toPrune) {
-                std::wstring oldPath = picDir + L"\\" + Widen(oldName);
-                if (DeleteFileW(oldPath.c_str())) {
-                    Log("WINDOW", "Pruned old screenshot: %s", Narrow(oldPath).c_str());
-                }
-            }
-        }
+    auto* job = new SnapJob();
+    job->width = rw;
+    job->height = rh;
+    job->bgra = std::move(bgra);
+    job->save = cfg.snapSave;
+    job->keepCount = cfg.snapKeepCount;
+    job->notify = overlay::Hwnd();
+    g_worker = CreateThread(nullptr, 0, EncodeWorker, job, 0, nullptr);
+    if (!g_worker) {  // no thread: do it here rather than lose the capture
+        LogErr("SNAP", "Worker thread failed (%lu); encoding on the UI thread", GetLastError());
+        job->notify = nullptr;
+        EncodeWorker(job);
+        OnEncoded(job);
     }
-
-    // Update UI snap state
-    ui::PostToUi("{\"type\":\"snap-state\",\"state\":\"done\"}");
-    if (encoded)
-        SetTimer(overlay::Hwnd(), kSnapRevertTimerId, 1500, nullptr);
-    else
-        ui::PostToUi("{\"type\":\"snap-state\",\"state\":\"camera\"}");
-
-    g_isSnapping = false;
 }
 
 bool Init() {
@@ -288,6 +301,11 @@ bool Init() {
 }
 
 void Cleanup() {
+    if (g_worker) {  // let an in-flight encode finish writing; its result message is dropped
+        WaitForSingleObject(g_worker, 5000);
+        CloseHandle(g_worker);
+        g_worker = nullptr;
+    }
     if (g_usedAffinity)
         SetWindowDisplayAffinity(overlay::Hwnd(), overlay::CaptureAffinity());
     else if (g_isSnapping && g_wasVisibleDuringSnap && overlay::IsVisible())

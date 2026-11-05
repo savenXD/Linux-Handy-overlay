@@ -191,6 +191,13 @@ void OnForegroundChanged(HWND hwnd) {
     }
 }
 
+void OnFocusPoll() {
+    if (g_isTyping && g_run && GetForegroundWindow() != g_run->targetWindow) {
+        Cancel();
+        overlay::ShowToast(ghost_logic::kToastFocusChanged);
+    }
+}
+
 void OnProgressTick() {
     if (!g_isTyping || !g_run || !g_run->startUs) return;
     const auto elapsed = (NowUs() - g_run->startUs) / 1000;
@@ -319,6 +326,7 @@ void Cancel() {
     KillTimer(overlay::Hwnd(), kGhostSettleTimerId);
     KillTimer(overlay::Hwnd(), kGhostStepTimerId);
     KillTimer(overlay::Hwnd(), kGhostProgressTimerId);
+    KillTimer(overlay::Hwnd(), kGhostFocusPollTimerId);
 
     if (g_run) {
         ReleaseHeldKey();
@@ -353,6 +361,7 @@ void OnGuardDisengageTimeout() {
 void FinishTyping() {
     KillTimer(overlay::Hwnd(), kGhostStepTimerId);
     KillTimer(overlay::Hwnd(), kGhostProgressTimerId);
+    KillTimer(overlay::Hwnd(), kGhostFocusPollTimerId);
     g_isTyping = false;
 
     size_t typed = g_run ? g_run->typist->TypedChars() : 0;
@@ -663,6 +672,7 @@ void Run() {
     }
     if (!SetTimer(overlay::Hwnd(), kGhostProgressTimerId, 500, nullptr))
         LogErr("GHOST", "Progress timer unavailable (%lu)", GetLastError());
+    SetTimer(overlay::Hwnd(), kGhostFocusPollTimerId, 16, nullptr);  // best effort; steps also check
     // Begin settle phase
     if (!SetTimer(overlay::Hwnd(), kGhostSettleTimerId, 10, nullptr)) Cancel();
 }

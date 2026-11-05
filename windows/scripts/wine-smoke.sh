@@ -62,7 +62,7 @@ for test in config_test parity_config_test; do
 done
 
 echo "== Phase 2 pure logic tests"
-for test in browser_logic_test jsonlite_test log_rotate_test geometry_test ghost_logic_test snap_logic_test ini_writer_test key_translate_test input_logic_test image_logic_test image_codec_test crash_report_test; do
+for test in browser_logic_test jsonlite_test log_rotate_test geometry_test ghost_logic_test snap_logic_test ini_writer_test key_translate_test input_logic_test lock_logic_test recovery_logic_test purge_logic_test update_logic_test image_logic_test image_codec_test crash_report_test; do
     if out=$(timeout 60 wine "$BIN/$test.exe" 2>/dev/null | tr -d '\r'); then
         printf '%s\n' "$out"
         check "$test" "$out" "all checks passed"
@@ -77,6 +77,8 @@ import configparser, pathlib, sys
 path=pathlib.Path(sys.argv[1]);path.parent.mkdir(parents=True,exist_ok=True)
 c=configparser.ConfigParser(interpolation=None);c.read(path)
 c['GhostTiming']={'human':sys.argv[2],'speed':'0','safe':'0'}
+# Wine has no WDA_EXCLUDEFROMCAPTURE, so Cronq would refuse to start (fail-closed). Test without it.
+c['Privacy']={'hide_from_capture':'false'}
 with path.open('w') as f:c.write(f)
 PYCONFIG
 }
@@ -167,7 +169,8 @@ check "daemon up under supervisor" "$(cli status)" "VISIBLE=TRUE"
 pid=$(timeout 30 wine tasklist 2>/dev/null | tr -d '\r' | awk '/cronqw.exe/ {print $2}' | sort -n | tail -1)
 timeout 30 wine taskkill /F /PID "$pid" >/dev/null 2>&1
 sleep 6
-check "daemon restarted after being killed" "$(cli status)" "VISIBLE=TRUE"
+# A crash restart comes back hidden: it must never pop the overlay up on its own.
+check "daemon restarted after being killed (hidden)" "$(cli status)" "VISIBLE=FALSE"
 check "crash.log written" "$(cat "$WINEPREFIX/drive_c/users/$USER/AppData/Local/cronq/crash.log" 2>/dev/null)" "Restarting in 2s"
 cli kill >/dev/null; sleep 3
 

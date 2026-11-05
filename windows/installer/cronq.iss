@@ -33,14 +33,17 @@ Name: "addtopath"; Description: "Add Cronq to user PATH (enables 'cronq' in any 
 Source: "..\dist\cronq.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\dist\cronqw.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\dist\WebView2Loader.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "killswitch.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\dist\ui\*"; DestDir: "{app}\ui"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{userprograms}\Cronq"; Filename: "{app}\cronqw.exe"; WorkingDir: "{app}"
+Name: "{userprograms}\Cronq"; Filename: "{app}\cronqw.exe"; Parameters: "--supervise --show"; WorkingDir: "{app}"
+
+[InstallDelete]
+; The kill switch is native since 1.2; remove the old PowerShell helper on upgrade.
+Type: files; Name: "{app}\killswitch.ps1"
 
 [Run]
-Filename: "{app}\cronqw.exe"; Description: "Launch Cronq"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\cronqw.exe"; Parameters: "--supervise --show"; Description: "Launch Cronq"; Flags: nowait postinstall skipifsilent
 
 [Registry]
 ; Autostart Run key

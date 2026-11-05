@@ -15,6 +15,7 @@ bool IsSnapping();
 
 void OnSnapTimeout();
 void OnSnapRevert();
+void OnEncoded(void* job);  // WM_CRONQ_SNAP_DONE (lParam) from the encoder thread
 
 }  // namespace snap
 }  // namespace cronq

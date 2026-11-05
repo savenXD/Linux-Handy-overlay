@@ -14,7 +14,6 @@
 #include "theme.h"
 
 #include <wtsapi32.h>
-#include <tlhelp32.h>
 #include <cstdio>
 #include <climits>
 #include <cstdlib>
@@ -27,8 +26,6 @@ namespace overlay {
 namespace {
 
 constexpr DWORD kAffinityExclude = 0x00000011;  // WDA_EXCLUDEFROMCAPTURE
-constexpr UINT_PTR kProtectTimerId = 0x4352;
-constexpr UINT kProtectIntervalMs = 150;
 
 const wchar_t* const kClassName = L"CronqOverlayWindow";
 constexpr UINT_PTR kToastTimerId = 1;
@@ -492,7 +489,7 @@ int g_dragStartX = 0, g_dragStartY = 0, g_dragStartW = 0, g_dragStartH = 0;
 int g_pressHit = HitNone;
 
 void ToggleMaximizedHeight() {
-    Mon mon = PrimaryMonitor();
+    Mon mon = Describe(MonitorFromWindow(g_hwnd, MONITOR_DEFAULTTONEAREST));  // the screen it is on
     if (!g_maximized) {
         g_prevW = g_w;
         g_prevH = g_h;
@@ -640,6 +637,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             browser::ResizeHost();
             ui::PushState();
             return 0;
+        case WM_CRONQ_SNAP_DONE:
+            snap::OnEncoded(reinterpret_cast<void*>(lp));
+            return 0;
         case WM_CRONQ_BROWSER_RECOVER:
             browser::Recover(static_cast<unsigned>(wp), static_cast<unsigned>(lp));
             return 0;
@@ -673,10 +673,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             }
             break;
         case WM_TIMER:
-            if (wp == kProtectTimerId) {
-                ProtectAllWindows();
-                return 0;
-            }
             if (wp == kDragTimerId) {
                 if (g_drag == DragNone || !(GetAsyncKeyState(VK_LBUTTON) & 0x8000)) {
                     KillTimer(hwnd, kDragTimerId);
@@ -713,6 +709,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             }
             if (wp == ghost::kGhostStepTimerId) {
                 ghost::StepTyping();
+                return 0;
+            }
+            if (wp == ghost::kGhostFocusPollTimerId) {
+                ghost::OnFocusPoll();
                 return 0;
             }
             if (wp == ghost::kGhostProgressTimerId) {
@@ -806,6 +806,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 // ---------------------------------------------------------------- public API
 
 static bool g_captureHidden = false;
+static bool g_refusedForCapture = false;
+bool RefusedForCapture() { return g_refusedForCapture; }
 
 unsigned CaptureAffinity() { return g_captureHidden ? kAffinityExclude : 0u; }
 
@@ -817,58 +819,27 @@ bool SetCaptureHidden(bool hidden) {
         return false;
     }
     g_captureHidden = hidden;
-    if (hidden) SetTimer(g_hwnd, kProtectTimerId, kProtectIntervalMs, nullptr);
-    else KillTimer(g_hwnd, kProtectTimerId);
     return true;
 }
 
 namespace {
 
-// Our process plus every descendant (the WebView2 browser/renderer/GPU processes).
-std::vector<DWORD> OwnProcessTree() {
-    std::vector<DWORD> ids{GetCurrentProcessId()};
-    HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-    if (snap == INVALID_HANDLE_VALUE) return ids;
-    std::vector<std::pair<DWORD, DWORD>> procs;  // pid, parent
-    PROCESSENTRY32W pe;
-    pe.dwSize = sizeof(pe);
-    for (BOOL ok = Process32FirstW(snap, &pe); ok; ok = Process32NextW(snap, &pe))
-        procs.emplace_back(pe.th32ProcessID, pe.th32ParentProcessID);
-    CloseHandle(snap);
-    for (size_t grew = 1; grew;) {  // fixed point: add children of anything already in the set
-        grew = 0;
-        for (const auto& p : procs)
-            if (std::find(ids.begin(), ids.end(), p.second) != ids.end() &&
-                std::find(ids.begin(), ids.end(), p.first) == ids.end()) {
-                ids.push_back(p.first);
-                ++grew;
-            }
-    }
-    return ids;
-}
-
-struct SweepCtx {
-    const std::vector<DWORD>* pids;
-};
-
-BOOL CALLBACK ProtectEnumProc(HWND hwnd, LPARAM lp) {
-    const auto* ctx = reinterpret_cast<SweepCtx*>(lp);
-    DWORD pid = 0;
-    GetWindowThreadProcessId(hwnd, &pid);
-    if (std::find(ctx->pids->begin(), ctx->pids->end(), pid) == ctx->pids->end()) return TRUE;
+BOOL CALLBACK ProtectEnumProc(HWND hwnd, LPARAM) {
     DWORD cur = 0;
-    if (GetWindowDisplayAffinity(hwnd, &cur) && cur != kAffinityExclude)
-        SetWindowDisplayAffinity(hwnd, kAffinityExclude);  // other process: may be refused; best effort
+    if (GetWindowDisplayAffinity(hwnd, &cur) && cur != kAffinityExclude &&
+        !SetWindowDisplayAffinity(hwnd, kAffinityExclude))
+        LogErr("WINDOW", "Could not exclude window 0x%p from capture (%lu)", static_cast<void*>(hwnd), GetLastError());
     return TRUE;
 }
 
 }  // namespace
 
+// Windows only lets a process exclude its own windows from capture, and Cronq creates all of its
+// top-level windows (overlay, kill prompt) on this UI thread. WebView2's own popups belong to
+// msedgewebview2.exe and cannot be excluded: browser.cpp disables them instead.
 void ProtectAllWindows() {
     if (!g_captureHidden) return;
-    const std::vector<DWORD> pids = OwnProcessTree();
-    SweepCtx ctx{&pids};
-    EnumWindows(ProtectEnumProc, reinterpret_cast<LPARAM>(&ctx));
+    EnumThreadWindows(GetCurrentThreadId(), ProtectEnumProc, 0);
 }
 
 bool Init(bool startVisible) {
@@ -915,6 +886,7 @@ bool Init(bool startVisible) {
                     L"Cronq", MB_OK | MB_ICONWARNING | MB_TOPMOST);
         DestroyWindow(g_hwnd);
         g_hwnd = nullptr;
+        g_refusedForCapture = true;
         return false;
     }
     hotkey::UpdateOverlayRect(g_x, g_y, g_x + g_w, g_y + g_h);
@@ -945,11 +917,28 @@ void Cleanup() {
 HWND Hwnd() { return g_hwnd; }
 void RefreshAppearance() { ApplyAlpha(); UpdateRegion(); QueueDraw(); }
 
+// Keeps a saved position reachable: a monitor may have been unplugged or rearranged while hidden.
+void KeepOnScreen() {
+    RECT want = {g_x, g_y, g_x + g_w, g_y + g_h};
+    Mon mon = Describe(MonitorFromRect(&want, MONITOR_DEFAULTTONEAREST));
+    const RECT& r = mon.work;
+    RECT inter;
+    if (IntersectRect(&inter, &want, &r) && (inter.right - inter.left) >= S(80) && (inter.bottom - inter.top) >= S(60))
+        return;  // enough of it is visible to grab and drag back
+    g_w = std::min(g_w, int(r.right - r.left));
+    g_h = std::min(g_h, int(r.bottom - r.top));
+    g_x = std::clamp(g_x, int(r.left), int(r.right) - g_w);
+    g_y = std::clamp(g_y, int(r.top), int(r.bottom) - g_h);
+    Log("WINDOW", "Saved position was off-screen; moved to (%d, %d)", g_x, g_y);
+}
+
 void Show() {
     if (!g_hwnd) return;
     if (!g_maximized && !g_userMoved) CalcPosition(&g_x, &g_y);
+    else KeepOnScreen();
     SetWindowPos(g_hwnd, HWND_TOPMOST, g_x, g_y, g_w, g_h, SWP_NOACTIVATE | SWP_SHOWWINDOW);
     g_visible = true;
+    hotkey::SetOverlayVisible(true);
     hotkey::UpdateOverlayRect(g_x, g_y, g_x + g_w, g_y + g_h);
     browser::Resume();
     Log("WINDOW", "Overlay shown (topmost, no-activate at (%d, %d))", g_x, g_y);
@@ -962,6 +951,7 @@ void Hide() {
     raise::Stop();
     ShowWindow(g_hwnd, SW_HIDE);
     g_visible = false;
+    hotkey::SetOverlayVisible(false);
     input::NotifyOverlayHidden();
     hotkey::UpdateOverlayRect(0, 0, 0, 0);
     browser::Pause();

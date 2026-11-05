@@ -150,10 +150,19 @@ LRESULT OnAppMessage(UINT msg, WPARAM wParam, LPARAM lParam) {
         case WM_CRONQ_ALTFIX:
             hotkey::InjectAltSuppressor();
             return 0;
-        case WM_CRONQ_CLICK:
-            if (wParam) browser::NotifyPointerClick();
-            input::OnMouseClick(wParam != 0);
+        case WM_CRONQ_CLICK: {
+            bool inside = wParam != 0;
+            if (inside) {
+                // Same hit test Windows uses for the click itself: colour-keyed (camouflage) pixels,
+                // click-through mode and windows stacked above the overlay all resolve elsewhere.
+                POINT pt = {static_cast<short>(LOWORD(lParam)), static_cast<short>(HIWORD(lParam))};
+                HWND hit = WindowFromPoint(pt);
+                inside = hit && GetAncestor(hit, GA_ROOT) == overlay::Hwnd();
+            }
+            if (inside) browser::NotifyPointerClick();
+            input::OnMouseClick(inside);
             return 0;
+        }
         case WM_CRONQ_KEY:
             input::OnKeyActivity();
             if (input::GetTypingTarget() == input::TypingTarget::Overlay || !(lParam & 1))

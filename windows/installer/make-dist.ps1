@@ -36,7 +36,6 @@ New-Item -ItemType Directory -Path $StagingDir | Out-Null
 foreach ($name in @('cronq.exe', 'cronqw.exe', 'WebView2Loader.dll')) {
     Copy-Item (Join-Path $ReleaseBin $name) -Destination $StagingDir -Force
 }
-Copy-Item -Path (Join-Path $PSScriptRoot 'killswitch.ps1') -Destination $StagingDir -Force
 Copy-Item -Path $UiSrc -Destination (Join-Path $StagingDir 'ui') -Recurse -Force
 if (Test-Path $DistDir) { Remove-Item -Recurse -Force $DistDir }
 Move-Item -Path $StagingDir -Destination $DistDir

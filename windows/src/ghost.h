@@ -15,6 +15,7 @@ bool IsTyping();
 bool IsGuardActive();
 void OnForegroundChanged(HWND hwnd);
 void OnProgressTick();
+void OnFocusPoll();
 
 ghost_logic::Timing GetTiming();
 void SetTiming(ghost_logic::Timing t);
@@ -30,6 +31,9 @@ constexpr UINT_PTR kGhostSettleTimerId = 1005;
 constexpr UINT_PTR kGhostStepTimerId = 1006;
 constexpr UINT_PTR kGhostGuardDisengageTimerId = 1007;
 constexpr UINT_PTR kGhostProgressTimerId = 1008;
+// While typing: checks the foreground window every ~16 ms, so a brief switch to another window is
+// caught even if the system's foreground notification arrives late (or not at all).
+constexpr UINT_PTR kGhostFocusPollTimerId = 1009;
 
 void OnCountdownTick();
 void OnSettleTick();

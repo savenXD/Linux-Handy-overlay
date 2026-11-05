@@ -40,10 +40,13 @@ int main(int argc, char**) {
         std::fflush(stdout);
         if (!passed) ++failures;
     };
-    check("all controllers and UI ready", Wait([] {
-        return ui::IsReady() && g.uiLoaded && g.views[kBrowser].core &&
-               g.views[kChat].core && g.views[kChat].scriptReady;
+    check("UI and preloaded ChatGPT ready", Wait([] {
+        return ui::IsReady() && g.uiLoaded && g.views[kChat].core && g.views[kChat].scriptReady;
     }));
+    check("browser view is not created until first use", !g.views[kBrowser].controller);
+    overlay::SwitchApp("browser");
+    check("browser view created on first use", Wait([] { return bool(g.views[kBrowser].core); }));
+    overlay::SwitchApp("home");
     if (!failures) {
         for (int n = 0; n < 6; ++n) {
             for (const char* app : {"chatgpt", "browser", "home"}) {

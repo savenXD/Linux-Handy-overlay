@@ -47,6 +47,7 @@ bool CapsLockOn();
 void Reinstall();
 bool IsLocked();
 void SetKillPending(bool pending);  // hook thread owns Enter/Esc while true
+void SetOverlayVisible(bool visible);  // layout shortcuts pass through to apps while hidden
 
 }  // namespace hotkey
 }  // namespace cronq

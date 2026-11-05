@@ -45,6 +45,15 @@ int main(int argc, char**) {
         std::puts("FAIL: missing diagnostics");
         return 1;
     }
+    std::wstring dump = report.substr(0, report.size() - 3) + L"dmp";
+    WIN32_FILE_ATTRIBUTE_DATA dumpInfo{};
+    const bool haveDump = GetFileAttributesExW(dump.c_str(), GetFileExInfoStandard, &dumpInfo) &&
+                          (dumpInfo.nFileSizeLow || dumpInfo.nFileSizeHigh);
+    DeleteFileW(dump.c_str());
+    if (!haveDump) {
+        std::puts("FAIL: missing minidump");
+        return 1;
+    }
     std::puts("crash_report_test: all checks passed");
     return 0;
 }

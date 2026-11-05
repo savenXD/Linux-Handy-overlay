@@ -1,5 +1,7 @@
 #include "ipc.h"
 
+#include <sddl.h>
+
 namespace cronq {
 namespace ipc {
 
@@ -24,7 +26,41 @@ std::wstring PipeName() {
     if (!GetUserNameW(user, &n)) lstrcpyW(user, L"user");
     std::wstring name = L"\\\\.\\pipe\\cronq-";
     for (wchar_t* p = user; *p; ++p) name += (*p == L'\\' || *p == L'/') ? L'_' : *p;
+    // Pipe names are machine-wide: the same account signed in twice (console + Remote Desktop)
+    // must get one Cronq per session, not fight over a single pipe.
+    DWORD session = 0;
+    if (ProcessIdToSessionId(GetCurrentProcessId(), &session)) name += L"-" + std::to_wstring(session);
     return name;
+}
+
+// Only this user account (and SYSTEM) may open the pipe; other local users cannot send commands.
+struct PipeSecurity {
+    SECURITY_ATTRIBUTES sa{sizeof(SECURITY_ATTRIBUTES), nullptr, FALSE};
+    PSECURITY_DESCRIPTOR sd = nullptr;
+    PipeSecurity() {
+        HANDLE token = nullptr;
+        if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token)) return;
+        DWORD size = 0;
+        GetTokenInformation(token, TokenUser, nullptr, 0, &size);
+        std::string buffer(size, '\0');
+        LPWSTR sid = nullptr;
+        if (size && GetTokenInformation(token, TokenUser, &buffer[0], size, &size) &&
+            ConvertSidToStringSidW(reinterpret_cast<TOKEN_USER*>(&buffer[0])->User.Sid, &sid)) {
+            std::wstring sddl = L"D:P(A;;GA;;;" + std::wstring(sid) + L")(A;;GA;;;SY)";
+            if (ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl.c_str(), SDDL_REVISION_1, &sd, nullptr))
+                sa.lpSecurityDescriptor = sd;
+            LocalFree(sid);
+        }
+        CloseHandle(token);
+    }
+    ~PipeSecurity() {
+        if (sd) LocalFree(sd);
+    }
+    SECURITY_ATTRIBUTES* Get() { return sd ? &sa : nullptr; }
+};
+PipeSecurity& Security() {
+    static PipeSecurity security;
+    return security;
 }
 
 // Overlapped read/write with a timeout. Returns false on error, timeout or end of stream.
@@ -96,7 +132,10 @@ void HandleClient(HANDLE pipe) {
     line = Trim(line);
     if (line.empty()) return;
 
-    Log("IPC", "Received command: '%.64s%s'", line.c_str(), line.size() > 64 ? "..." : "");
+    // Only the command word: arguments can be private (typed text, URLs). Status polling is not logged.
+    const std::string verb = line.substr(0, line.find(' '));
+    if (!EqNoCase(verb, "STATUS") && !EqNoCase(verb, "GET_GEOMETRY") && !EqNoCase(verb, "GET_OPACITY"))
+        Log("IPC", "Received command: %.32s", verb.c_str());
     std::string resp = ExecuteOnUiThread(line);
 
     size_t off = 0;
@@ -126,7 +165,7 @@ DWORD WINAPI ServerThread(LPVOID) {
             pipe =
                 CreateNamedPipeW(name.c_str(), PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED,
                                  PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS,
-                                 PIPE_UNLIMITED_INSTANCES, 65536, 65536, 0, nullptr);
+                                 PIPE_UNLIMITED_INSTANCES, 65536, 65536, 0, Security().Get());
             if (pipe == INVALID_HANDLE_VALUE) {
                 LogErr("IPC", "CreateNamedPipe failed (%lu); retrying.", GetLastError());
                 if (WaitForSingleObject(g_stopEvent, 500) == WAIT_OBJECT_0) break;
@@ -234,7 +273,7 @@ bool StartServer() {
     g_firstPipe = CreateNamedPipeW(
         PipeName().c_str(), PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED | FILE_FLAG_FIRST_PIPE_INSTANCE,
         PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS,
-        PIPE_UNLIMITED_INSTANCES, 65536, 65536, 0, nullptr);
+        PIPE_UNLIMITED_INSTANCES, 65536, 65536, 0, Security().Get());
     if (g_firstPipe == INVALID_HANDLE_VALUE) {
         LogErr("MAIN", "Another instance of Cronq is already running (pipe error %lu).", GetLastError());
         return false;

@@ -5,7 +5,7 @@
     if (document.getElementById('__cronq_caret_style')) return;
     var style = document.createElement('style');
     style.id = '__cronq_caret_style';
-    style.textContent = 'input, textarea, [contenteditable], #prompt-textarea, .ProseMirror { caret-color: #ffffff !important; }';
+    style.textContent = 'input, textarea, [contenteditable], #prompt-textarea, .ProseMirror { caret-color: currentColor !important; }';
     (document.head || document.documentElement).appendChild(style);
   }
   injectCaretStyle();

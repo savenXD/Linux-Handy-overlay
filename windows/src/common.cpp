@@ -89,10 +89,15 @@ namespace {
 struct LogState {
     CRITICAL_SECTION cs;
     HANDLE file = INVALID_HANDLE_VALUE;
+    unsigned linesSinceCheck = 0;
     LogState() {
         InitializeCriticalSection(&cs);
+        Open();
+    }
+    // Keep the log from growing forever: rotate past 2 MB, at start-up and while running
+    // (Cronq can run for weeks without a restart).
+    void Open() {
         std::wstring path = DataDir() + L"\\cronq.log";
-        // Keep the log from growing forever: rotate past 2 MB.
         WIN32_FILE_ATTRIBUTE_DATA info;
         if (GetFileAttributesExW(path.c_str(), GetFileExInfoStandard, &info) &&
             log_rotate::ShouldRotate((static_cast<uint64_t>(info.nFileSizeHigh) << 32) | info.nFileSizeLow)) {
@@ -102,6 +107,15 @@ struct LogState {
         file = CreateFileW(path.c_str(), FILE_APPEND_DATA,
                            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_ALWAYS,
                            FILE_ATTRIBUTE_NORMAL, nullptr);
+    }
+    void RotateIfLarge() {  // caller holds cs
+        if (++linesSinceCheck < 256 || file == INVALID_HANDLE_VALUE) return;
+        linesSinceCheck = 0;
+        LARGE_INTEGER size{};
+        if (!GetFileSizeEx(file, &size) || !log_rotate::ShouldRotate(static_cast<uint64_t>(size.QuadPart))) return;
+        CloseHandle(file);
+        file = INVALID_HANDLE_VALUE;
+        Open();
     }
     ~LogState() {
         if (file != INVALID_HANDLE_VALUE) CloseHandle(file);
@@ -129,6 +143,7 @@ void Emit(const char* tag, bool isErr, const char* fmt, va_list args) {
         DWORD written = 0;
         WriteFile(state.file, line, (DWORD)n, &written, nullptr);
     }
+    state.RotateIfLarge();
     LeaveCriticalSection(&state.cs);
 
     // Console build: also show it live. Harmless when no console is attached.

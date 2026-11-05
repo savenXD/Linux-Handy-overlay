@@ -27,7 +27,7 @@ physical key for that letter in the current layout.
 | --- | --- |
 | Alt+K | Lock: hide the overlay and disable every other hotkey. No confirmation. Not persisted. |
 | Alt+K+X (either press order, Alt held) | Unlock: hotkeys work again and the overlay is shown. |
-| Alt+Shift+K | Kill switch prompt (works while locked). Enter confirms, Esc cancels, auto-cancel after 15 s. |
+| Alt+Shift+K | Kill switch prompt (works while locked). Enter confirms, Esc cancels, auto-cancel after 15 s. Windows also cancels on any other non-modifier key (which still reaches the app) and uses 5 s while the overlay is hidden, where the prompt is not drawn. |
 
 | Alt+C | Toggle camouflage (restores the previous Dark/Light mode) |
 | Alt+T | Camouflage: black/white text. Otherwise Dark/Light |
@@ -69,4 +69,10 @@ GET_GEOMETRY reply: `X=<n> Y=<n> W=<n> H=<n>`
 - Moving the overlay between DPI settings preserves its current physical rectangle and rescales controls. Default Size uses the current DPI for configured dimensions.
 - Hotkeys are swallowed by a low-level keyboard hook, not an X11 passive grab.
 - Hiding the overlay from screen capture (`[Privacy] hide_from_capture`) is Windows-only; X11 has no equivalent.
+- While the overlay is hidden, Windows passes the layout shortcuts (Alt+G/A/S/F/D/M/C/T, Alt+Left/Right) to the focused
+  application; only Alt+X/P/W/K and Alt+Shift+K stay global. Linux keeps all grabs.
+- Windows clears modifier state the hook missed (releases on the secure desktop or in elevated windows), so a
+  plain letter is never mistaken for an Alt shortcut.
+- Stay-on-top guard on Windows: 60 raises/s, burst 20, and a window that stays above after a raise (Start
+  menu, higher shell bands) or wins 10 raises in 1 s is left alone for 3-5 s instead of being fought at full rate.
 - Camouflage transparency uses a Windows colour key; on Linux it uses an ARGB window (needs a compositor), so empty areas do not click through.

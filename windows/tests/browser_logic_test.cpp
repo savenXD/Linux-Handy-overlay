@@ -40,5 +40,8 @@ int main() {
     CHECK(IsDomainAllowedForChatGpt("https://one.test/", " other.test; one.test "));
     CHECK(ChatGptUserScript().find("DOMContentLoaded") != std::string::npos);
     CHECK(ChatGptUserScript().find("__cronq_chatgpt_enter_installed") != std::string::npos);
+    CHECK(NoTooltipScript().find("removeAttribute('title')") != std::string::npos);
+    CHECK(NoTooltipScript().find("MutationObserver") != std::string::npos);
+    CHECK(ChatGptUserScript().find("#ffffff") == std::string::npos);  // caret follows the theme text colour
     std::puts("browser_logic_test: all checks passed");
 }

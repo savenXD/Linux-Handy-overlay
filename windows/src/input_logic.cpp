@@ -4,6 +4,14 @@ namespace input_logic {
 Route Router::Key(unsigned vk, bool down, const Context& c) {
     if (vk >= held_.size()) return {};
     Held kind = held_[vk];
+    // A key the hook passed through is visible to Windows; if Windows says it is up, the
+    // earlier release was missed and this is a new press, not an auto-repeat.
+    const bool passedThrough = kind == Held::Pass || kind == Held::Mirror;
+    if (down && kind != Held::None && passedThrough && !c.osHeld) kind = Held::None;
+    // Swallowed keys never reach Windows, so check the remembered reason instead: a "hotkey"
+    // key typed without its modifiers, or an overlay key typed after routing ended, is new.
+    if (down && kind == Held::Hotkey && !c.hotkey) kind = Held::None;
+    if (down && (kind == Held::Exclusive || kind == Held::Shield) && !c.target) kind = Held::None;
     const bool repeat = down && kind != Held::None;
     if (down && !repeat) {
         if (c.hotkey)

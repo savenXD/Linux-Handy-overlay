@@ -5,7 +5,7 @@
 | Area | Evidence | Open |
 | :--- | :--- | :--- |
 | Overlay excluded from capture (`WDA_EXCLUDEFROMCAPTURE`) | Cross-compiles; config default unit-tested | Verify on real Windows with Zoom, Meet, OBS and `getDisplayMedia`: overlay absent, still visible locally |
-| WebView2 popups/menus excluded | 150 ms sweep of Cronq process tree (code review only) | Confirm dropdown, context menu, permission prompt and file picker are absent from a recording |
+| WebView2 popups/menus | Cannot be excluded (other process). Disabled instead: context menus, DevTools, accelerator keys, autofill/password bubbles, script dialogs, permission prompts, download bubble, `title` tooltips (page script + UI). The old 150 ms process-tree sweep was removed: cross-process `SetWindowDisplayAffinity` is refused | Confirm none of these appear; `<select>` lists and the file picker remain visible by design |
 | Fail-closed on unsupported Windows | Code path only | Test on Windows 10 older than 2004 |
 
 ## v1.0.0 native Windows update — 2026-11-05

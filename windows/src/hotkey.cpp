@@ -17,6 +17,8 @@ namespace hotkey {
 namespace {
 
 constexpr UINT kReinstallMessage = WM_APP + 41;
+constexpr UINT kResyncMessage = WM_APP + 42;  // also forget all remembered key state
+constexpr UINT kMouseHookMessage = WM_APP + 43;  // wParam 1 = install the mouse hook, 0 = remove it
 constexpr int kCount = (int)Id::Count;
 
 HWND g_target = nullptr;
@@ -36,6 +38,7 @@ volatile LONG g_installed = 0;
 volatile LONG g_stopping = 0;
 bool g_suppressorSent = false;
 bool g_physicalDown[256] = {};
+bool g_swallowedDown[256] = {};  // the hook swallowed this key's press, so Windows never saw it
 volatile LONG g_capsLock = 0, g_numLock = 0;
 int64_t g_lastTriggerUs[kCount] = {};
 
@@ -49,7 +52,8 @@ volatile LONG g_keyMode = 0;        // 0 = Mirror, 1 = Exclusive
 volatile LONG g_shieldEnabled = 0;  // 1 = on
 volatile LONG g_guardActive = 0;    // 1 = ghost writer typing guard
 volatile LONG g_locked = 0;         // 1 = Alt+K lock: every hotkey except the unlock chord is off
-volatile LONG g_killPending = 0;    // 1 = kill confirmation is on screen
+volatile LONG g_killPending = 0;    // 1 = kill confirmation is armed
+volatile LONG g_overlayVisible = 0; // 1 = overlay on screen; layout shortcuts only work then
 
 int64_t DedupeUs(Id id) {
     switch (id) {
@@ -148,6 +152,30 @@ Id Match(DWORD vk) {
 
 bool Down(int vk) { return (GetAsyncKeyState(vk) & 0x8000) != 0; }
 
+// Shortcuts that only change the overlay's window. While it is hidden they are not Cronq's, so
+// the key reaches the focused application (Alt+Left stays "Back" in browsers, and so on).
+bool IsLayoutHotkey(Id id) {
+    switch (id) {
+        case Id::Ghost: case Id::OpacityDec: case Id::OpacityInc: case Id::Fullscreen:
+        case Id::DefaultSize: case Id::Mode: case Id::Camouflage: case Id::Tone:
+        case Id::DockLeft: case Id::DockRight:
+            return true;
+        default:
+            return false;
+    }
+}
+
+// Start over from Windows' view of the keyboard (after unlock / resume, when releases were missed).
+void ResyncKeyState() {
+    for (unsigned vk = 0; vk < 256; ++vk) {
+        g_physicalDown[vk] = Down(vk);
+        g_swallowedDown[vk] = false;
+    }
+    g_physicalDown[VK_MENU] = g_physicalDown[VK_SHIFT] = g_physicalDown[VK_CONTROL] = false;
+    g_router.Reset();
+    g_suppressorSent = false;
+}
+
 unsigned Modifiers() {
     auto held = [](unsigned a, unsigned b, unsigned c) {
         return g_physicalDown[a] || g_physicalDown[b] || g_physicalDown[c];
@@ -167,7 +195,9 @@ LRESULT CALLBACK LowLevelMouseProc(int code, WPARAM wp, LPARAM lp) {
             LONG r = InterlockedCompareExchange(&g_rectRight, 0, 0);
             LONG b = InterlockedCompareExchange(&g_rectBottom, 0, 0);
             bool inside = (ms->pt.x >= l && ms->pt.x < r && ms->pt.y >= t && ms->pt.y < b);
-            PostMessageW(g_target, WM_CRONQ_CLICK, inside ? 1 : 0, 0);
+            // The UI thread confirms "inside" with a real hit test (see app.cpp): in camouflage,
+            // transparent pixels pass the click to the window underneath.
+            PostMessageW(g_target, WM_CRONQ_CLICK, inside ? 1 : 0, MAKELPARAM(ms->pt.x, ms->pt.y));
         }
     }
     return CallNextHookEx(nullptr, code, wp, lp);
@@ -188,7 +218,12 @@ LRESULT CALLBACK LowLevelKeyboardProc(int code, WPARAM wp, LPARAM lp) {
     const bool up = wp == WM_KEYUP || wp == WM_SYSKEYUP;
     if (!down && !up) return CallNextHookEx(nullptr, code, wp, lp);
     DWORD vk = kb->vkCode;
-    const bool wasDown = g_physicalDown[vk];
+    // Inside this hook Windows' async state still describes the moment *before* this event.
+    const bool osHeld = Down(static_cast<int>(vk));
+    // A modifier release that went to a secure desktop (Ctrl+Alt+Del, UAC) or an elevated window
+    // never reaches this hook. Drop such stale "held" flags so plain letters are not hotkeys.
+    if (down) input_logic::ClearStaleKeys(g_physicalDown, g_swallowedDown, vk, [](unsigned k) { return Down(static_cast<int>(k)); });
+    const bool wasDown = g_physicalDown[vk] && (osHeld || g_swallowedDown[vk]);
     g_physicalDown[vk] = down;
     if (down && !wasDown && vk == VK_CAPITAL) InterlockedXor(&g_capsLock, 1);
     if (down && !wasDown && vk == VK_NUMLOCK) InterlockedXor(&g_numLock, 1);
@@ -196,6 +231,7 @@ LRESULT CALLBACK LowLevelKeyboardProc(int code, WPARAM wp, LPARAM lp) {
     Id id = vk == 'C' ? Id::Camouflage : vk == 'T' ? Id::Tone :
             vk == VK_LEFT ? Id::DockLeft : vk == VK_RIGHT ? Id::DockRight : Match(vk);
     input_logic::Context context;
+    if (IsLayoutHotkey(id) && !InterlockedCompareExchange(&g_overlayVisible, 0, 0)) id = Id::None;
     context.hotkey = id != Id::None && (mods == 1 || ((kb->flags & LLKHF_ALTDOWN) && !(mods & 14)));
     const bool locked = InterlockedCompareExchange(&g_locked, 0, 0) != 0;
     if (locked) {
@@ -225,12 +261,18 @@ LRESULT CALLBACK LowLevelKeyboardProc(int code, WPARAM wp, LPARAM lp) {
                 id = Id::KillConfirm;
                 InterlockedExchange(&g_killPending, 0);
                 break;
+            case lock_logic::Action::KillAbort:
+                id = Id::None;  // the key goes on to the focused app; only the prompt is dismissed
+                InterlockedExchange(&g_killPending, 0);
+                PostMessageW(g_target, WM_CRONQ_HOTKEY, static_cast<WPARAM>(Id::KillCancel), 0);
+                break;
             default:
                 id = Id::KillCancel;
                 InterlockedExchange(&g_killPending, 0);
                 break;
         }
-        context.hotkey = true;  // swallow the key (and its release) so no other app sees it
+        // swallow the key (and its release) so no other app sees it
+        context.hotkey = lockAction != lock_logic::Action::KillAbort;
     }
     else if (locked && mods == 1 && (vk == 'K' || vk == 'X')) {
         // Locked: swallow the chord keys (no action, id stays None) so the focused app never sees Alt+K / Alt+X.
@@ -241,6 +283,7 @@ LRESULT CALLBACK LowLevelKeyboardProc(int code, WPARAM wp, LPARAM lp) {
     context.exclusive = InterlockedCompareExchange(&g_keyMode, 0, 0) != 0;
     context.shield = InterlockedCompareExchange(&g_shieldEnabled, 0, 0) != 0;
     context.ctrlOnly = mods == 2;
+    context.osHeld = osHeld;
     const auto route = g_router.Key(vk, down, context);
     // Snapshot modifiers before the asynchronous UI handoff. Never query UI-thread keyboard state later.
     LPARAM packed = (down ? 1 : 0) | (static_cast<LPARAM>(mods) << 1) |
@@ -258,7 +301,22 @@ LRESULT CALLBACK LowLevelKeyboardProc(int code, WPARAM wp, LPARAM lp) {
     }
     if (route.forward) PostMessageW(g_target, WM_CRONQ_KEY, vk, packed);
     if (route.clipboard) PostMessageW(g_target, WM_CRONQ_CLIPBOARD, vk, down ? 1 : 0);
+    if (down) g_swallowedDown[vk] = route.swallow;
+    if (up) g_swallowedDown[vk] = false;
     return route.swallow ? 1 : CallNextHookEx(nullptr, code, wp, lp);
+}
+
+// The low-level mouse hook runs for every mouse movement on the whole system (1000+ times a second
+// with gaming mice) and adds latency to the cursor when Cronq is busy. It is only needed to notice
+// clicks on or away from the overlay, so it exists only while the overlay is on screen.
+void SetMouseHook(bool wanted) {
+    if (wanted && !g_mouseHook && !InterlockedCompareExchange(&g_stopping, 0, 0)) {
+        g_mouseHook = SetWindowsHookExW(WH_MOUSE_LL, LowLevelMouseProc, GetModuleHandleW(nullptr), 0);
+        if (!g_mouseHook) LogErr("HOTKEY", "SetWindowsHookEx(WH_MOUSE_LL) failed (%lu).", GetLastError());
+    } else if (!wanted && g_mouseHook) {
+        UnhookWindowsHookEx(g_mouseHook);
+        g_mouseHook = nullptr;
+    }
 }
 
 void InstallHooksInternal() {
@@ -268,11 +326,8 @@ void InstallHooksInternal() {
     if (!g_kbdHook) {
         LogErr("HOTKEY", "SetWindowsHookEx(WH_KEYBOARD_LL) failed (%lu).", GetLastError());
     }
-    g_mouseHook = SetWindowsHookExW(WH_MOUSE_LL, LowLevelMouseProc, inst, 0);
-    if (!g_mouseHook) {
-        LogErr("HOTKEY", "SetWindowsHookEx(WH_MOUSE_LL) failed (%lu).", GetLastError());
-    }
-    InterlockedExchange(&g_installed, g_kbdHook && g_mouseHook ? 1 : 0);
+    SetMouseHook(InterlockedCompareExchange(&g_overlayVisible, 0, 0) != 0);
+    InterlockedExchange(&g_installed, g_kbdHook ? 1 : 0);
 }
 
 void CALLBACK ReinstallProc(HWND, UINT, UINT_PTR, DWORD) {
@@ -290,8 +345,7 @@ DWORD WINAPI HookThreadProc(LPVOID) {
         SetEvent(g_hookReadyEvent);
         return 0;
     }
-    for (unsigned vk = 0; vk < 256; ++vk) g_physicalDown[vk] = Down(vk);
-    g_physicalDown[VK_MENU] = g_physicalDown[VK_SHIFT] = g_physicalDown[VK_CONTROL] = false;
+    ResyncKeyState();
     InterlockedExchange(&g_capsLock, GetKeyState(VK_CAPITAL) & 1);
     InterlockedExchange(&g_numLock, GetKeyState(VK_NUMLOCK) & 1);
     InstallHooksInternal();
@@ -303,7 +357,12 @@ DWORD WINAPI HookThreadProc(LPVOID) {
 
     MSG msg;
     while (GetMessageW(&msg, nullptr, 0, 0) > 0) {
-        if (msg.message == kReinstallMessage) {
+        if (msg.message == kMouseHookMessage) {
+            SetMouseHook(msg.wParam != 0);
+            continue;
+        }
+        if (msg.message == kReinstallMessage || msg.message == kResyncMessage) {
+            if (msg.message == kResyncMessage) ResyncKeyState();
             ReinstallProc(nullptr, 0, 0, 0);
             continue;
         }
@@ -355,7 +414,13 @@ void SetKillPending(bool pending) { InterlockedExchange(&g_killPending, pending 
 bool CapsLockOn() { return InterlockedCompareExchange(&g_capsLock, 0, 0) != 0; }
 
 void Reinstall() {
-    if (g_hookThreadId) PostThreadMessageW(g_hookThreadId, kReinstallMessage, 0, 0);
+    // Called after unlock / resume: key releases during the lock screen were never seen.
+    if (g_hookThreadId) PostThreadMessageW(g_hookThreadId, kResyncMessage, 0, 0);
+}
+
+void SetOverlayVisible(bool visible) {
+    if (InterlockedExchange(&g_overlayVisible, visible ? 1 : 0) == (visible ? 1 : 0)) return;
+    if (g_hookThreadId) PostThreadMessageW(g_hookThreadId, kMouseHookMessage, visible ? 1 : 0, 0);
 }
 
 void ReloadKeys() {
@@ -450,6 +515,7 @@ void Dispatch(Id id) {
     if (id <= Id::None || id >= Id::Count) return;
     // A normal shortcut may already be queued when the hook enters the locked state.
     if (IsLocked() && id >= Id::Toggle && id <= Id::DockRight) return;
+    if (IsLayoutHotkey(id) && !overlay::IsVisible()) return;  // queued just before a hide
     int64_t now = NowUs();
     if (now - g_lastTriggerUs[(int)id] < DedupeUs(id)) {
         Log("HOTKEY", "Deduped %s (<%lld ms since last trigger)", Describe(id),

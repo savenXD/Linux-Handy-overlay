@@ -1,11 +1,20 @@
 #include "crash_handler.h"
 #include "common.h"
 #include <cstdint>
+#include <dbghelp.h>
+#include <algorithm>
+#include <string>
+#include <vector>
 
 namespace cronq {
 namespace crash_handler {
 namespace {
 wchar_t g_crashDir[MAX_PATH * 2] = {};
+// dbghelp is loaded up front: loading a DLL inside a crash is not safe.
+using MiniDumpWriteDumpFn = BOOL(WINAPI*)(HANDLE, DWORD, HANDLE, MINIDUMP_TYPE, PMINIDUMP_EXCEPTION_INFORMATION,
+                                          PMINIDUMP_USER_STREAM_INFORMATION, PMINIDUMP_CALLBACK_INFORMATION);
+MiniDumpWriteDumpFn g_writeDump = nullptr;
+constexpr size_t kKeepDumps = 3;
 volatile LONG g_reporting = 0;
 // Fixed storage and Win32 writes: the faulting thread may already hold CRT/logging locks.
 struct Report {
@@ -111,9 +120,42 @@ LONG WINAPI CrashFilter(EXCEPTION_POINTERS* ep) {
         WriteFile(file, r.data, r.size, &written, nullptr);
         CloseHandle(file);
     }
+    // A small minidump (stacks, threads, modules; no full heap) next to the text report.
+    if (g_writeDump) {
+        size_t len = 0;
+        while (path[len]) ++len;
+        if (len > 4) {
+            path[len - 3] = L'd';
+            path[len - 2] = L'm';
+            path[len - 1] = L'p';
+            HANDLE dump = CreateFileW(path, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+            if (dump != INVALID_HANDLE_VALUE) {
+                MINIDUMP_EXCEPTION_INFORMATION info{};
+                info.ThreadId = GetCurrentThreadId();
+                info.ExceptionPointers = ep;
+                info.ClientPointers = FALSE;
+                g_writeDump(GetCurrentProcess(), GetCurrentProcessId(), dump,
+                            static_cast<MINIDUMP_TYPE>(MiniDumpWithThreadInfo | MiniDumpWithUnloadedModules),
+                            &info, nullptr, nullptr);
+                CloseHandle(dump);
+            }
+        }
+    }
     HANDLE err = GetStdHandle(STD_ERROR_HANDLE);
     if (err && err != INVALID_HANDLE_VALUE) WriteFile(err, r.data, r.size, &written, nullptr);
     return EXCEPTION_EXECUTE_HANDLER;
+}
+// Dumps are a few MB each: keep only the newest few.
+void PruneDumps(const std::wstring& dir) {
+    std::vector<std::wstring> names;
+    WIN32_FIND_DATAW fd;
+    HANDLE find = FindFirstFileW((dir + L"\\crash-*.dmp").c_str(), &fd);
+    if (find == INVALID_HANDLE_VALUE) return;
+    do names.push_back(fd.cFileName);
+    while (FindNextFileW(find, &fd));
+    FindClose(find);
+    std::sort(names.begin(), names.end());  // crash-YYYYMMDD-HHMMSS-pid: oldest first
+    for (size_t i = 0; i + kKeepDumps < names.size(); ++i) DeleteFileW((dir + L"\\" + names[i]).c_str());
 }
 }  // namespace
 void Install() {
@@ -124,6 +166,9 @@ void Install() {
         ++i;
     }
     g_crashDir[i] = 0;
+    if (HMODULE dbghelp = LoadLibraryExW(L"dbghelp.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32))
+        g_writeDump = reinterpret_cast<MiniDumpWriteDumpFn>(GetProcAddress(dbghelp, "MiniDumpWriteDump"));
+    PruneDumps(dir);
     SetUnhandledExceptionFilter(CrashFilter);
     Log("CRASH", "Crash handler registered (logs in '%s').", Narrow(g_crashDir).c_str());
 }

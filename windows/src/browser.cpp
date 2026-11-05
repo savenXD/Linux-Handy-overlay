@@ -7,6 +7,8 @@
 #include <vector>
 
 #include "browser_logic.h"
+#include "recovery_logic.h"
+#include <map>
 #include "config.h"
 #include "jsonlite.h"
 #include "key_translate.h"
@@ -64,6 +66,9 @@ struct State {
     HMODULE loader = nullptr;
     RECT slot{};
     bool slotValid = false, uiLoaded = false, contentStarted = false, muted = false;
+    // The browser view (its own renderer + home page download) is created on first use only; once
+    // used it is kept and recreated after crashes.
+    bool browserWanted = false;
     int activeIndex = kBrowser;
     unsigned environmentGeneration = 0;
 } g;
@@ -100,6 +105,39 @@ void CloseView(int i) {
     v.uri.clear();
     v.title.clear();
 }
+// ---- recovery pacing: a crash loop (bad GPU driver, broken runtime) must not spin the CPU.
+constexpr unsigned kRecoverNow = 0x100;  // wParam flag: a delayed recovery whose wait is over
+recovery_logic::Backoff g_recoverBackoff[5] = {  // views 0-3, 4 = whole environment
+    {0, 2000, 60000, 30000}, {0, 2000, 60000, 30000}, {0, 2000, 60000, 30000},
+    {0, 2000, 60000, 30000}, {0, 2000, 60000, 30000}};
+std::map<UINT_PTR, std::pair<unsigned, unsigned>> g_delayedRecover;  // timer -> (index, generation)
+recovery_logic::Backoff g_initBackoff(5000, 10000, 120000, 600000);
+UINT_PTR g_retryTimer = 0;
+HWND g_retryParent = nullptr;
+
+void CALLBACK DelayedRecoverProc(HWND, UINT, UINT_PTR id, DWORD) {
+    KillTimer(nullptr, id);
+    auto it = g_delayedRecover.find(id);
+    if (it == g_delayedRecover.end()) return;
+    const auto request = it->second;
+    g_delayedRecover.erase(it);
+    if (g_parent) PostMessageW(g_parent, WM_CRONQ_BROWSER_RECOVER, request.first | kRecoverNow, request.second);
+}
+void CancelDelayedRecoveries() {
+    for (const auto& entry : g_delayedRecover) KillTimer(nullptr, entry.first);
+    g_delayedRecover.clear();
+}
+void CALLBACK RetryInitProc(HWND, UINT, UINT_PTR id, DWORD) {
+    KillTimer(nullptr, id);
+    g_retryTimer = 0;
+    HWND parent = g_retryParent;
+    g_retryParent = nullptr;
+    if (!parent || !g_shuttingDown) return;
+    Log("BROWSER", "Retrying WebView2 start-up.");
+    Init(parent);
+    overlay::QueueDraw();
+}
+
 void Fail(const char* operation, HRESULT hr) {
     g_shuttingDown = true;
     LogErr("BROWSER", "WebView2 unavailable: %s hr=0x%08lX", operation, hr);
@@ -116,6 +154,14 @@ void Fail(const char* operation, HRESULT hr) {
     for (int j = 3; j >= 0; --j) CloseView(j);
     g.environment.Reset();
     g_shuttingDown = true;
+    // Transient failures (runtime updating, low memory, runtime installed later) recover on their own:
+    // try again after 5 s, then 10, 20 ... 120 s, instead of staying broken until Cronq restarts.
+    if (g_parent && !g_retryTimer) {
+        const int64_t delay = std::max<int64_t>(1000, g_initBackoff.Next(NowUs() / 1000));
+        g_retryParent = g_parent;
+        g_retryTimer = SetTimer(nullptr, 0, static_cast<UINT>(delay), RetryInitProc);
+        Log("BROWSER", "Will retry WebView2 in %lld s.", (long long)(delay / 1000));
+    }
     overlay::QueueDraw();
 }
 void Navigate(View& v, const std::string& uri) {
@@ -158,7 +204,8 @@ void PopupRequested(int source, ICoreWebView2NewWindowRequestedEventArgs* args) 
         !Check(args->get_IsUserInitiated(&user), "popup get_IsUserInitiated"))
         return;
     std::string text = uri.Text();
-    Log("BROWSER", "NewWindowRequested uri='%s' isUserInitiated=%d", text.c_str(), user);
+    // Hosts only: full URLs (conversation ids, search terms, tokens) never go into the log.
+    Log("BROWSER", "NewWindowRequested host='%s' isUserInitiated=%d", browser_logic::ExtractHost(text).c_str(), user);
     if (!browser_logic::IsAuthUri(text) && user && !text.empty() && text != "about:blank") {
         if (Check(args->put_Handled(TRUE), "popup handled")) Navigate(g.views[source], text);
         return;
@@ -187,6 +234,22 @@ bool ConfigureView(int i) {
     // The UI host is trusted; remote content never receives the native bridge.
     if (!Check(settings->put_IsWebMessageEnabled(i == kUi ? TRUE : FALSE), "put_IsWebMessageEnabled"))
         return false;
+    // Native browser chrome (menus, DevTools, autofill/password bubbles, dialogs, prompts) is drawn
+    // in separate msedgewebview2.exe windows. Windows only lets a process exclude its *own* windows
+    // from capture, so those would show up in recordings and screen shares: turn them all off.
+    Check(settings->put_AreDefaultContextMenusEnabled(FALSE), "put_AreDefaultContextMenusEnabled");
+    Check(settings->put_AreDevToolsEnabled(FALSE), "put_AreDevToolsEnabled");
+    Check(settings->put_AreDefaultScriptDialogsEnabled(FALSE), "put_AreDefaultScriptDialogsEnabled");
+    {
+        ComPtr<ICoreWebView2Settings3> settings3;
+        if (SUCCEEDED(settings.As(&settings3)))  // Ctrl+F find bar, Ctrl+P print, F12 ... (editing keys stay)
+            Check(settings3->put_AreBrowserAcceleratorKeysEnabled(FALSE), "put_AreBrowserAcceleratorKeysEnabled");
+        ComPtr<ICoreWebView2Settings4> settings4;
+        if (SUCCEEDED(settings.As(&settings4))) {
+            Check(settings4->put_IsGeneralAutofillEnabled(FALSE), "put_IsGeneralAutofillEnabled");
+            Check(settings4->put_IsPasswordAutosaveEnabled(FALSE), "put_IsPasswordAutosaveEnabled");
+        }
+    }
     ComPtr<ICoreWebView2Controller2> controller2;
     if (!Check(v.controller.As(&controller2), "Query controller2") ||
         !Check(controller2->put_DefaultBackgroundColor({255, 0, 0, 0}), "put_DefaultBackgroundColor"))
@@ -212,8 +275,8 @@ bool ConfigureView(int i) {
         if (i == kChat && !text.empty() && !browser_logic::IsAuthUri(text) &&
             !browser_logic::IsDomainAllowedForChatGpt(text, config::Get().chatgptAllowlist)) {
             Check(a->put_Cancel(TRUE), "divert navigation");
-            Log("BROWSER", "ChatGPT navigating to external domain '%s' -> Diverting to Browser app.",
-                text.c_str());
+            Log("BROWSER", "ChatGPT navigating to external host '%s' -> Diverting to Browser app.",
+                browser_logic::ExtractHost(text).c_str());
             overlay::SwitchApp("browser");
             LoadInBrowser(text);
             return;
@@ -240,7 +303,8 @@ bool ConfigureView(int i) {
             g.uiLoaded = true;
             if (!g.contentStarted) {
                 g.contentStarted = true;
-                CreateView(kBrowser);
+                CreateView(kChat);  // preloaded so ChatGPT opens instantly
+                if (g.browserWanted) CreateView(kBrowser);
             }
         }
         UpdateLayout();
@@ -258,6 +322,25 @@ bool ConfigureView(int i) {
         ui::PushState();
     });
     ok &= BIND(i, HistoryChanged, IUnknown*, [](auto*) { ui::PushState(); });
+    // Default dialogs are off: an unhandled alert/confirm/prompt is dismissed. Leaving a page
+    // (beforeunload) is allowed so navigation never gets stuck behind an invisible question.
+    ok &= BIND(i, ScriptDialogOpening, ICoreWebView2ScriptDialogOpeningEventArgs*, [](auto* a) {
+        COREWEBVIEW2_SCRIPT_DIALOG_KIND kind{};
+        if (Check(a->get_Kind(&kind), "dialog get_Kind") && kind == COREWEBVIEW2_SCRIPT_DIALOG_KIND_BEFOREUNLOAD)
+            Check(a->Accept(), "dialog Accept");
+    });
+    // Permission prompts are native bubbles too: decide silently instead of asking.
+    ok &= BIND(i, PermissionRequested, ICoreWebView2PermissionRequestedEventArgs*, [i](auto* a) {
+        COREWEBVIEW2_PERMISSION_KIND kind{};
+        Check(a->get_PermissionKind(&kind), "permission get_PermissionKind");
+        const bool allow = i == kChat && kind == COREWEBVIEW2_PERMISSION_KIND_CLIPBOARD_READ;
+        Check(a->put_State(allow ? COREWEBVIEW2_PERMISSION_STATE_ALLOW : COREWEBVIEW2_PERMISSION_STATE_DENY),
+              "permission put_State");
+        if (!allow) {
+            Log("BROWSER", "Denied permission kind=%d in view=%d", int(kind), i);
+            overlay::ShowToast("Blocked a site permission request");
+        }
+    });
     ok &= BIND(i, ProcessFailed, ICoreWebView2ProcessFailedEventArgs*, [i](auto* a) {
         COREWEBVIEW2_PROCESS_FAILED_KIND kind{};
         Check(a->get_ProcessFailedKind(&kind), "get_ProcessFailedKind");
@@ -307,6 +390,33 @@ bool ConfigureView(int i) {
                 return;
             if (Check(a->get_WebMessageAsJson(&text.p), "get_WebMessageAsJson")) ui::OnMessage(text.Text());
         });
+    }
+    if (i != kUi) {
+        ComPtr<ICoreWebView2_4> core4;
+        if (SUCCEEDED(v.core.As(&core4))) {
+            unsigned gen = v.generation;
+            EventRegistrationToken token{};
+            auto handler = MakeHandler<ICoreWebView2DownloadStartingEventHandler, ICoreWebView2*,
+                                       ICoreWebView2DownloadStartingEventArgs*>(
+                [i, gen](ICoreWebView2*, ICoreWebView2DownloadStartingEventArgs* a) -> HRESULT {
+                    if (!Live(i, gen)) return S_OK;
+                    Check(a->put_Handled(TRUE), "download put_Handled");  // no download bubble; file still saves
+                    overlay::ShowToast("Download saved to your Downloads folder");
+                    return S_OK;
+                });
+            if (Check(core4->add_DownloadStarting(handler.Get(), &token), "add_DownloadStarting")) {
+                ICoreWebView2_4* raw = core4.Get();
+                raw->AddRef();
+                v.detach.emplace_back([raw, token] {
+                    Check(raw->remove_DownloadStarting(token), "remove_DownloadStarting");
+                    raw->Release();
+                });
+            }
+        }
+        // Chat gets this inside its own combined script (registered before its first navigation).
+        if (i != kChat)
+            Check(v.core->AddScriptToExecuteOnDocumentCreated(Widen(browser_logic::NoTooltipScript()).c_str(), nullptr),
+                  "AddScript no-tooltips");
     }
     Mute(v);
     return ok;
@@ -381,7 +491,9 @@ void CreateView(int i) {
                 return S_OK;
             });
             hr = view.core->AddScriptToExecuteOnDocumentCreated(
-                Widen(browser_logic::ChatGptUserScript() + ";" + theme::WebScript()).c_str(), scriptDone.Get());
+                Widen(browser_logic::ChatGptUserScript() + ";" + browser_logic::NoTooltipScript() + ";" +
+                      theme::WebScript()).c_str(),
+                scriptDone.Get());
             if (!Check(hr, "AddScriptToExecuteOnDocumentCreated")) {
                 view.scriptReady = true;
                 Navigate(view, view.pending.empty() ? "https://chatgpt.com" : view.pending);
@@ -392,7 +504,6 @@ void CreateView(int i) {
                                                      : view.pending;
             view.pending.clear();
             Navigate(view, url);
-            if (i == kBrowser && !g.views[kChat].controller && !g.views[kChat].creating) CreateView(kChat);
         }
         UpdateLayout();
         ui::PushState();
@@ -408,7 +519,8 @@ void UpdateLayout() {
     for (int i = 0; i < 4; ++i) {
         auto& v = g.views[i];
         if (!v.controller) continue;
-        bool visible = i == kUi ? g.uiLoaded
+        bool visible = g.muted ? false
+                     : i == kUi ? g.uiLoaded
                                 : (g.uiLoaded && g.slotValid &&
                                    (i == kPopup ? bool(v.core)
                                                 : !HasPopup() && ((i == kBrowser && g_app == "browser") ||
@@ -511,6 +623,10 @@ void Cleanup() {
     g_shuttingDown = true;
     ui::Reset();
 #ifdef CRONQ_WEBVIEW2
+    CancelDelayedRecoveries();
+    if (g_retryTimer) KillTimer(nullptr, g_retryTimer);
+    g_retryTimer = 0;
+    g_retryParent = nullptr;
     if (g.popup) {
         g.popup->Complete();
         g.popup.reset();
@@ -536,9 +652,18 @@ bool IsUiVisible() {
 #endif
 }
 const std::string& FailureReason() { return g_failure; }
+#ifdef CRONQ_WEBVIEW2
+namespace {
+void EnsureBrowserView() {
+    g.browserWanted = true;
+    if (!g_shuttingDown && g.uiLoaded) CreateView(kBrowser);  // no-op if it exists or is being created
+}
+}  // namespace
+#endif
 void SetActiveApp(const std::string& name) {
     g_app = name;
 #ifdef CRONQ_WEBVIEW2
+    if (name == "browser") EnsureBrowserView();
     if (name == "chatgpt")
         g.activeIndex = kChat;
     else if (name != "ghost")
@@ -549,6 +674,7 @@ void SetActiveApp(const std::string& name) {
 }
 void LoadInBrowser(const std::string& input) {
 #ifdef CRONQ_WEBVIEW2
+    EnsureBrowserView();
     Navigate(g.views[kBrowser], browser_logic::NormalizeInput(input, config::Get().searchUrlTemplate));
 #else
     (void)input;
@@ -623,23 +749,66 @@ std::string CurrentTitle() {
     return {};
 #endif
 }
+#ifdef CRONQ_WEBVIEW2
+namespace {
+void SetMemoryTarget(View& v, bool low) {
+    ComPtr<ICoreWebView2_19> core19;
+    if (v.core && SUCCEEDED(v.core.As(&core19)))
+        Check(core19->put_MemoryUsageTargetLevel(low ? COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_LOW
+                                                     : COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_NORMAL),
+              "put_MemoryUsageTargetLevel");
+}
+}  // namespace
+#endif
+// Hidden overlay: every view is marked not visible so Chromium throttles timers, animation and
+// painting. ChatGPT keeps running (an answer can finish streaming while hidden); the browser page
+// is suspended outright and asked to drop memory.
 void Pause() {
 #ifdef CRONQ_WEBVIEW2
     g.muted = true;
     for (auto& v : g.views) Mute(v);
+    UpdateLayout();  // puts every controller to IsVisible(FALSE) while muted
+    auto& browserView = g.views[kBrowser];
+    if (browserView.core && !g_shuttingDown) {
+        SetMemoryTarget(browserView, true);
+        ComPtr<ICoreWebView2_3> core3;
+        if (SUCCEEDED(browserView.core.As(&core3))) {
+            auto done = MakeHandler<ICoreWebView2TrySuspendCompletedHandler, HRESULT, BOOL>(
+                [](HRESULT hr, BOOL) -> HRESULT { Check(hr, "TrySuspend completed"); return S_OK; });
+            Check(core3->TrySuspend(done.Get()), "TrySuspend");
+        }
+    }
 #endif
 }
 void Resume() {
 #ifdef CRONQ_WEBVIEW2
     g.muted = false;
     for (auto& v : g.views) Mute(v);
+    SetMemoryTarget(g.views[kBrowser], false);
     ResizeHost();
-    UpdateLayout();
+    UpdateLayout();  // IsVisible(TRUE) also resumes a suspended page
 #endif
 }
 void Recover(unsigned index, unsigned generation) {
 #ifdef CRONQ_WEBVIEW2
-    if (g_shuttingDown) return;
+    const bool waited = (index & kRecoverNow) != 0;
+    index &= ~kRecoverNow;
+    if (g_shuttingDown || index > 4) return;
+    // Ignore stale notifications before they count towards the backoff.
+    if (index == 4 ? (!g.environment || g.environmentGeneration != generation)
+                   : g.views[index].generation != generation)
+        return;
+    if (!waited) {
+        const int64_t delay = g_recoverBackoff[index].Next(NowUs() / 1000);
+        if (delay > 0) {
+            UINT_PTR timer = SetTimer(nullptr, 0, static_cast<UINT>(delay), DelayedRecoverProc);
+            if (timer) {
+                g_delayedRecover[timer] = {index, generation};
+                LogErr("BROWSER", "Repeated failure of view %u; recovering in %lld s.", index, (long long)(delay / 1000));
+                return;
+            }
+        }
+    }
     if (index == 4) {
         // Coalesce process-failure notifications from all views in this environment.
         if (!g.environment || g.environmentGeneration != generation) return;
@@ -667,9 +836,9 @@ void Recover(unsigned index, unsigned generation) {
 void UniversalReset() {
     ClosePopup();
 #ifdef CRONQ_WEBVIEW2
-    CloseView(kBrowser);
+    CloseView(kBrowser);  // a new-like state: the browser view is created again on next use
     g.views[kBrowser].pending.clear();
-    CreateView(kBrowser);
+    g.browserWanted = false;
     LoadInChatGpt("https://chatgpt.com");
 #endif
     // Reset's visible behavior is wired in overlay::UniversalReset (Linux parity).
@@ -937,18 +1106,11 @@ void PasteImageOrText() {
         CloseClipboard();
     }
 
+    // An image that could not be read is reported, never replaced by an older screenshot from disk.
     if (hasImage && b64Png.empty()) {
-        std::wstring latestPath = DataDir() + L"\\latest_snap.png";
-        std::ifstream f(latestPath.c_str(), std::ios::binary | std::ios::ate);
-        if (f.is_open()) {
-            const auto length = f.tellg();
-            if (length > 0 && static_cast<uint64_t>(length) <= image_logic::kMaxImageBytes) {
-                std::vector<uint8_t> bytes(static_cast<size_t>(length));
-                f.seekg(0);
-                f.read(reinterpret_cast<char*>(bytes.data()), length);
-                if (f) b64Png = snap_logic::Base64Encode(bytes.data(), bytes.size());
-            }
-        }
+        LogErr("BROWSER", "Clipboard image could not be read; nothing pasted");
+        overlay::ShowToast("Could not read the copied image");
+        return;
     }
 
     if (!b64Png.empty()) {

@@ -38,8 +38,9 @@ void RefreshAppearance();
 void ShowToast(const std::string& msg);
 
 // Capture protection (WDA_EXCLUDEFROMCAPTURE). The overlay stays visible to you but not to recorders / screen sharing.
-bool SetCaptureHidden(bool hidden);   // main overlay window; false if Windows refuses (needs 10 2004+)
-void ProtectAllWindows();             // also marks popups/menus of Cronq and its WebView2 processes
+bool SetCaptureHidden(bool hidden);
+bool RefusedForCapture();            // Init failed because capture protection is unavailable   // main overlay window; false if Windows refuses (needs 10 2004+)
+void ProtectAllWindows();             // excludes every top-level window of this (UI) thread, e.g. the kill prompt
 unsigned CaptureAffinity();   // affinity value to restore after a temporary change (snap)
 
 double Scale();
