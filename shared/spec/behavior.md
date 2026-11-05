@@ -21,13 +21,20 @@ physical key for that letter in the current layout.
 | M | Cycle Mirror / Exclusive | `mode_key` | 150 ms |
 | W | Ghost Writer | `ghost_writer_key` | 200 ms |
 
-### Lock and kill switch (Windows first, Linux pending)
+### Lock, kill switch, appearance and docking (Windows and Linux)
 
 | Keys | Action |
 | --- | --- |
 | Alt+K | Lock: hide the overlay and disable every other hotkey. No confirmation. Not persisted. |
 | Alt+K+X (either press order, Alt held) | Unlock: hotkeys work again and the overlay is shown. |
 | Alt+Shift+K | Kill switch prompt (works while locked). Enter confirms, Esc cancels, auto-cancel after 15 s. |
+
+| Alt+C | Toggle camouflage (restores the previous Dark/Light mode) |
+| Alt+T | Camouflage: black/white text. Otherwise Dark/Light |
+| Alt+Left / Alt+Right | Dock bottom-left / bottom-right and save `[General] corner` |
+
+Appearance is saved as `[Appearance] mode`: 0 Dark, 1 Light, 2 camouflage with black text (default), 3 camouflage with white
+text. Lock disables Alt+C/T/arrows too. Camouflage hides chrome (header, footer, controls) and makes backgrounds transparent.
 
 Confirming quits Cronq and removes the program, autostart/startup entries, shortcuts, PATH entry and every
 data directory (settings, logins, logs, screenshots) from the machine.
@@ -61,3 +68,5 @@ GET_GEOMETRY reply: `X=<n> Y=<n> W=<n> H=<n>`
 - Pixel sizes from config are scaled by the monitor DPI (150% display => 540x960 pixels).
 - Moving the overlay between DPI settings preserves its current physical rectangle and rescales controls. Default Size uses the current DPI for configured dimensions.
 - Hotkeys are swallowed by a low-level keyboard hook, not an X11 passive grab.
+- Hiding the overlay from screen capture (`[Privacy] hide_from_capture`) is Windows-only; X11 has no equivalent.
+- Camouflage transparency uses a Windows colour key; on Linux it uses an ARGB window (needs a compositor), so empty areas do not click through.

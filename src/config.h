@@ -37,6 +37,12 @@ typedef struct {
     char        ghost_newline[32];/* "space" (default), "return", "skip" */
     char        ghost_tab[32];    /* "space" (default), "tab", "skip" */
     int         ghost_max_chars;  /* default 100000 (0 = unlimited) */
+
+    /* [Appearance] mode: 0 Dark, 1 Light, 2 Camouflage black text, 3 Camouflage white text; -1 (unset) = camouflage with text colour following the system theme */
+    int         appearance_mode;
+
+    /* [Privacy] hide_from_capture: hide the overlay while another program captures the screen (default true) */
+    bool        hide_from_capture;
 } AppConfig;
 
 bool              config_init(void);
@@ -44,5 +50,7 @@ void              config_cleanup(void);
 const AppConfig  *config_get(void);
 bool              config_reload(void);
 const char       *config_get_path(void);
+/* Persist a single key (keeps comments), then update the in-memory config. */
+bool              config_save_value(const char *group, const char *key, const char *value);
 
 #endif /* CONFIG_H */

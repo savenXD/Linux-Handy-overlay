@@ -4,6 +4,7 @@
 #include "config.h"
 #include "input.h"
 #include "raise.h"
+#include "theme.h"
 #include "xutil.h"
 
 #include <gdk/gdkx.h>
@@ -144,18 +145,75 @@ static const char *s_svg_top_close_icon =
     "<line x1=\"6\" y1=\"6\" x2=\"18\" y2=\"18\"/>"
     "</svg>";
 
+typedef struct {
+    GtkWidget  *img;
+    const char *svg;
+    int         w, h;
+} SvgEntry;
+
+static GPtrArray *s_svg_entries = NULL;
+
+static GdkPixbuf *render_svg_pixbuf(const char *svg_str, int width, int height, gboolean themed) {
+    char *tmp = themed ? theme_recolor_svg(svg_str) : NULL;
+    const char *src = tmp ? tmp : svg_str;
+    GInputStream *stream = g_memory_input_stream_new_from_data(src, -1, NULL);
+    GdkPixbuf *pb = NULL;
+    if (stream) {
+        pb = gdk_pixbuf_new_from_stream_at_scale(stream, width, height, TRUE, NULL, NULL);
+        g_object_unref(stream);
+    }
+    g_free(tmp);
+    return pb;
+}
+
+static void on_svg_image_finalized(gpointer data, GObject *where_the_object_was) {
+    SvgEntry *e = data;
+    if (s_svg_entries) g_ptr_array_remove(s_svg_entries, e);
+    (void)where_the_object_was;
+    g_free(e);
+}
+
+/* App-tile icons keep their own colours in every theme; UI-chrome icons follow the theme. */
 static GtkWidget *create_svg_image(const char *svg_str, int width, int height) {
     if (!svg_str) return gtk_label_new("");
-    GInputStream *stream = g_memory_input_stream_new_from_data(svg_str, -1, NULL);
-    if (!stream) return gtk_label_new("");
-    GdkPixbuf *pb = gdk_pixbuf_new_from_stream_at_scale(stream, width, height, TRUE, NULL, NULL);
-    g_object_unref(stream);
+    gboolean themed = !(svg_str == s_svg_chatgpt_icon || svg_str == s_svg_ghost_app || svg_str == s_svg_browser_icon);
+    GdkPixbuf *pb = render_svg_pixbuf(svg_str, width, height, themed);
     if (!pb) return gtk_label_new("");
     GtkWidget *img = gtk_image_new_from_pixbuf(pb);
     g_object_unref(pb);
+    if (themed) {
+        if (!s_svg_entries) s_svg_entries = g_ptr_array_new();
+        SvgEntry *e = g_new0(SvgEntry, 1);
+        e->img = img; e->svg = svg_str; e->w = width; e->h = height;
+        g_ptr_array_add(s_svg_entries, e);
+        g_object_weak_ref(G_OBJECT(img), on_svg_image_finalized, e);
+    }
     return img;
 }
 
+static void refresh_themed_svgs(void) {
+    if (!s_svg_entries) return;
+    for (guint i = 0; i < s_svg_entries->len; i++) {
+        SvgEntry *e = g_ptr_array_index(s_svg_entries, i);
+        GdkPixbuf *pb = render_svg_pixbuf(e->svg, e->w, e->h, TRUE);
+        if (pb) {
+            gtk_image_set_from_pixbuf(GTK_IMAGE(e->img), pb);
+            g_object_unref(pb);
+        }
+    }
+}
+
+static GtkCssProvider *s_css_provider = NULL;
+static GtkWidget *s_status_bar = NULL;
+static GtkWidget *s_bottom_nav = NULL;
+static GtkWidget *s_home_search_eb = NULL;
+static GtkWidget *s_home_sec_lbl = NULL;
+static GtkWidget *s_home_apps_box = NULL;
+static GtkWidget *s_theme_btn = NULL;
+static GtkWidget *s_theme_btn_label = NULL;
+static GPtrArray *s_app_labels = NULL;
+
+static gboolean s_capture_hidden = FALSE;
 static gboolean s_is_snapping = FALSE;
 static guint    s_snap_revert_timer = 0;
 static gboolean s_was_visible_during_snap = FALSE;
@@ -268,6 +326,9 @@ static const char *s_phone_css =
     ".top-ctrl-btn { background: transparent; background-image: none; box-shadow: none; border: none; padding: 3px; min-width: 20px; min-height: 20px; border-radius: 6px; }"
     ".top-ctrl-btn:hover { background-color: #1f1f1f; }"
     ".top-close-btn:hover { background-color: #ef4444; }"
+    ".theme-btn { background: transparent; background-image: none; box-shadow: none; border: 1px solid #262626; border-radius: 6px; padding: 1px 7px; min-height: 0; }"
+    ".theme-btn label { color: #e5e5e5; font-size: 10px; }"
+    ".theme-btn:hover { background-color: #1f1f1f; }"
     ".resize-grip { opacity: 0.4; padding: 2px; }"
     ".resize-grip:hover { opacity: 1.0; }"
     /* ---- browser header ---- */
@@ -1411,6 +1472,7 @@ static gboolean on_toast_dismiss_timeout(gpointer user_data) {
 }
 
 void overlay_show_toast(const char *msg) {
+    if (theme_is_camo()) return;   /* camouflage shows no toasts, as on Windows */
     if (!s_toast_box || !s_toast_label || !msg) return;
 
     gtk_label_set_text(GTK_LABEL(s_toast_label), msg);
@@ -1519,6 +1581,8 @@ static GtkWidget *create_app_icon_widget(const char *label_text, const char *app
     GtkWidget *lbl = gtk_label_new(label_text);
     gtk_style_context_add_class(gtk_widget_get_style_context(lbl), "app-label");
     gtk_box_pack_start(GTK_BOX(col), lbl, FALSE, FALSE, 0);
+    if (!s_app_labels) s_app_labels = g_ptr_array_new();
+    g_ptr_array_add(s_app_labels, lbl);
 
     gtk_container_add(GTK_CONTAINER(btn), col);
     g_signal_connect(btn, "clicked", G_CALLBACK(on_app_icon_clicked), (gpointer)app_id);
@@ -1542,6 +1606,7 @@ static GtkWidget *create_home_page(void) {
     gtk_widget_set_margin_start(search_eb, 20);
     gtk_widget_set_margin_end(search_eb, 20);
     gtk_widget_set_margin_bottom(search_eb, 12);
+    s_home_search_eb = search_eb;
 
     GtkWidget *search_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
     gtk_style_context_add_class(gtk_widget_get_style_context(search_box), "home-search-bar");
@@ -1563,6 +1628,7 @@ static GtkWidget *create_home_page(void) {
     gtk_widget_set_halign(sec_lbl, GTK_ALIGN_START);
     gtk_widget_set_margin_start(sec_lbl, 24);
     gtk_widget_set_margin_bottom(sec_lbl, 6);
+    s_home_sec_lbl = sec_lbl;
     gtk_box_pack_start(GTK_BOX(box), sec_lbl, FALSE, FALSE, 0);
 
     /* App Icons Grid: ChatGPT and Chrome */
@@ -1578,11 +1644,9 @@ static GtkWidget *create_home_page(void) {
     GtkWidget *btn_ghost_app = create_app_icon_widget("Ghost Typer", "ghost");
     gtk_box_pack_start(GTK_BOX(apps_box), btn_ghost_app, FALSE, FALSE, 0);
 
-    gtk_box_pack_start(GTK_BOX(box), apps_box, FALSE, FALSE, 0);
-
-    /* Flexible bottom space */
-    GtkWidget *expander = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
-    gtk_box_pack_start(GTK_BOX(box), expander, TRUE, TRUE, 0);
+    /* The icon row takes the free space so camouflage can centre it (like Windows) without moving anything else. */
+    s_home_apps_box = apps_box;
+    gtk_box_pack_start(GTK_BOX(box), apps_box, TRUE, TRUE, 0);
 
     return box;
 }
@@ -1741,6 +1805,46 @@ static void add_nav_content(GtkWidget *button, GtkWidget *icon, const char *text
     gtk_container_add(GTK_CONTAINER(button), column);
 }
 
+static void reload_theme_css(void) {
+    if (!s_css_provider) return;
+    char *css = theme_build_css(s_phone_css);
+    gtk_css_provider_load_from_data(s_css_provider, css, -1, NULL);
+    g_free(css);
+}
+
+static void set_camo_hidden(GtkWidget *w, gboolean hidden) {
+    if (!w) return;
+    gtk_widget_set_no_show_all(w, hidden);
+    if (hidden) gtk_widget_hide(w);
+    else gtk_widget_show_all(w);
+}
+
+static void on_theme_btn_clicked(GtkButton *btn, gpointer user_data) {
+    (void)btn; (void)user_data;
+    theme_cycle();
+}
+
+/* Re-skin everything after a theme change (CSS, icons, camouflage chrome visibility). */
+void overlay_apply_theme(void) {
+    if (!s_window) return;
+    gboolean camo = theme_is_camo();
+    reload_theme_css();
+    refresh_themed_svgs();
+    set_camo_hidden(s_status_bar, camo);
+    set_camo_hidden(s_bottom_nav, camo);
+    set_camo_hidden(s_header_box, camo);
+    set_camo_hidden(s_home_search_eb, camo);
+    set_camo_hidden(s_home_sec_lbl, camo);
+    if (s_app_labels) {
+        for (guint i = 0; i < s_app_labels->len; i++)
+            set_camo_hidden(g_ptr_array_index(s_app_labels, i), camo);
+    }
+    if (s_home_apps_box) gtk_widget_set_valign(s_home_apps_box, camo ? GTK_ALIGN_CENTER : GTK_ALIGN_START);
+    if (s_theme_btn_label) gtk_label_set_text(GTK_LABEL(s_theme_btn_label), theme_mode_label());
+    gtk_widget_queue_draw(s_window);
+    xutil_log("WINDOW", "Applied theme '%s' (camo=%d).", theme_mode_label(), camo);
+}
+
 gboolean window_init(gboolean start_visible) {
     const AppConfig *cfg = config_get();
 
@@ -1803,11 +1907,11 @@ gboolean window_init(gboolean start_visible) {
     calculate_monitor_position(&s_pos_x, &s_pos_y);
     gtk_window_move(GTK_WINDOW(s_window), s_pos_x, s_pos_y);
 
-    /* Apply CSS styles */
-    GtkCssProvider *provider = gtk_css_provider_new();
-    gtk_css_provider_load_from_data(provider, s_phone_css, -1, NULL);
-    gtk_style_context_add_provider_for_screen(screen, GTK_STYLE_PROVIDER(provider), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
-    g_object_unref(provider);
+    /* Apply CSS styles (theme-aware) */
+    theme_init(cfg->appearance_mode);
+    s_css_provider = gtk_css_provider_new();
+    gtk_style_context_add_provider_for_screen(screen, GTK_STYLE_PROVIDER(s_css_provider), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+    reload_theme_css();
 
     /* 5. Construct Phone UI Layout */
     s_root_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
@@ -1817,6 +1921,7 @@ gboolean window_init(gboolean start_visible) {
 
     /* --- Top Navigation / Status Bar --- */
     GtkWidget *status_bar = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 4);
+    s_status_bar = status_bar;
     gtk_style_context_add_class(gtk_widget_get_style_context(status_bar), "status-bar");
     gtk_box_pack_start(GTK_BOX(s_root_box), status_bar, FALSE, FALSE, 0);
 
@@ -1841,6 +1946,17 @@ gboolean window_init(gboolean start_visible) {
     gtk_box_pack_start(GTK_BOX(left_box), s_grab_pill, FALSE, FALSE, 0);
     gtk_widget_set_no_show_all(s_grab_pill, TRUE);
     gtk_widget_hide(s_grab_pill);
+
+    /* Appearance button: cycles Dark -> Light -> Camo */
+    s_theme_btn = gtk_button_new();
+    gtk_widget_set_can_focus(s_theme_btn, FALSE);
+    gtk_style_context_add_class(gtk_widget_get_style_context(s_theme_btn), "theme-btn");
+    s_theme_btn_label = gtk_label_new(theme_mode_label());
+    gtk_container_add(GTK_CONTAINER(s_theme_btn), s_theme_btn_label);
+    gtk_widget_set_tooltip_text(s_theme_btn, "Appearance: Dark / Light / Camo (Alt+C camo, Alt+T text colour)");
+    g_signal_connect(s_theme_btn, "clicked", G_CALLBACK(on_theme_btn_clicked), NULL);
+    g_signal_connect(s_theme_btn, "button-press-event", G_CALLBACK(on_widget_button_press), NULL);
+    gtk_box_pack_start(GTK_BOX(left_box), s_theme_btn, FALSE, FALSE, 0);
 
     gtk_box_pack_start(GTK_BOX(status_bar), left_box, FALSE, FALSE, 0);
 
@@ -2004,6 +2120,7 @@ gboolean window_init(gboolean start_visible) {
 
     /* --- Bottom Navigation Bar --- */
     GtkWidget *bottom_nav = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 3);
+    s_bottom_nav = bottom_nav;
     gtk_box_set_homogeneous(GTK_BOX(bottom_nav), TRUE);
     gtk_style_context_add_class(gtk_widget_get_style_context(bottom_nav), "bottom-nav");
     gtk_box_pack_start(GTK_BOX(s_root_box), bottom_nav, FALSE, FALSE, 0);
@@ -2141,6 +2258,7 @@ gboolean window_init(gboolean start_visible) {
     XSetClassHint(xdpy, s_xid, &class_hint);
 
     update_x11_state_properties();
+    overlay_apply_theme();
 
     xutil_log("WINDOW", "Created override-redirect overlay XID 0x%lx (%lu)",
               (unsigned long)s_xid, (unsigned long)s_xid);
@@ -2157,6 +2275,24 @@ gboolean window_init(gboolean start_visible) {
     return TRUE;
 }
 
+void overlay_set_capture_hidden(gboolean hidden) {
+    if (!s_window || s_xid == None) return;
+    Display *xdpy = gdk_x11_display_get_xdisplay(gdk_display_get_default());
+    if (hidden) {
+        s_capture_hidden = TRUE;
+        if (s_visible) {
+            XUnmapWindow(xdpy, s_xid);
+            XFlush(xdpy);
+        }
+    } else {
+        s_capture_hidden = FALSE;
+        if (s_visible) {
+            XMapRaised(xdpy, s_xid);
+            XFlush(xdpy);
+        }
+    }
+}
+
 void overlay_show(void) {
     if (!s_window) return;
 
@@ -2170,7 +2306,11 @@ void overlay_show(void) {
     gtk_window_move(GTK_WINDOW(s_window), s_pos_x, s_pos_y);
     Display *xdpy = gdk_x11_display_get_xdisplay(gdk_display_get_default());
     XMoveResizeWindow(xdpy, s_xid, s_pos_x, s_pos_y, s_win_width, s_win_height);
-    XMapRaised(xdpy, s_xid);
+    if (s_capture_hidden) {
+        XUnmapWindow(xdpy, s_xid);   /* a capture is running: stay out of it until the guard restores us */
+    } else {
+        XMapRaised(xdpy, s_xid);
+    }
     XFlush(xdpy);
 
     s_visible = TRUE;
@@ -2248,6 +2388,14 @@ void overlay_apply_config(void) {
     overlay_update_status_ui();
     xutil_log("WINDOW", "Applied config: %dx%d, opacity=%.2f, pos=(%d,%d)",
               s_win_width, s_win_height, s_current_opacity, s_pos_x, s_pos_y);
+}
+
+void overlay_dock_corner(const char *corner) {
+    if (!s_window || !corner) return;
+    config_save_value("General", "corner", corner);
+    s_is_maximized = FALSE;
+    overlay_reposition();
+    overlay_show_toast(g_ascii_strcasecmp(corner, "bottom-right") == 0 ? "Docked bottom-right" : "Docked bottom-left");
 }
 
 void overlay_toggle(void) {

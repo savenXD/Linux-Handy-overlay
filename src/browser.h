@@ -66,5 +66,6 @@ GtkWidget     *browser_get_widget(void);
 WebKitWebView *browser_get_view(void);
 
 void           browser_universal_reset(void);
+void           browser_apply_theme(int mode);
 
 #endif /* BROWSER_H */

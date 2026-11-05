@@ -1,5 +1,6 @@
 #include "browser.h"
 #include "config.h"
+#include "theme.h"
 #include "input.h"
 #include "xutil.h"
 
@@ -19,6 +20,7 @@ static WebKitWebView             *s_view_chatgpt = NULL;
 static GtkWidget                 *s_scroll_chatgpt = NULL;
 
 static WebKitWebView             *s_active_popup = NULL;
+static void browser_theme_view(WebKitWebView *view);
 static char                       s_active_app[32] = "browser";
 
 static BrowserProgressCallback   s_progress_cb = NULL;
@@ -239,8 +241,7 @@ static GtkWidget *on_web_view_create(WebKitWebView *web_view, WebKitNavigationAc
     WebKitSettings *settings = webkit_web_view_get_settings(web_view);
     webkit_web_view_set_settings(popup, settings);
 
-    GdkRGBA bg = {0.0, 0.0, 0.0, 1.0};
-    webkit_web_view_set_background_color(popup, &bg);
+    browser_theme_view(popup);
 
     s_active_popup = popup;
     g_signal_connect(popup, "close", G_CALLBACK(on_popup_close), NULL);
@@ -401,6 +402,90 @@ static void on_web_process_terminated(WebKitWebView *view, WebKitWebProcessTermi
     }
 }
 
+/* ---- Theming of web content ----
+ * ChatGPT and other sites use their own light/dark setting (ChatGPT: Settings > Appearance). Cronq only
+ * overrides ChatGPT in camouflage mode, where it needs a transparent, text-only view (as on Windows). */
+static const char *s_camo_chatgpt_js =
+    "(()=>{if(location.hostname!=='chatgpt.com'&&!location.hostname.endsWith('.chatgpt.com'))return;"
+    "const TEXT='%s';"
+    "if(!window.__cronqCamo){"
+    "let style;"
+    "const apply=()=>{const root=document.documentElement;if(!root)return;"
+    "if(!style||!style.isConnected){style=document.createElement('style');style.id='cronq-camo';(document.head||root).appendChild(style);}"
+    "const css=`header,nav,aside,footer,#stage-slideover-sidebar,#stage-sidebar,"
+    "[data-testid=\"sidebar\"],[data-testid=\"model-switcher-dropdown-button\"],"
+    "[data-testid=\"conversation-options-button\"],[data-testid=\"share-chat-button\"],"
+    "[data-testid*=\"avatar\"],[data-testid=\"thread-bottom-disclaimer\"],[data-testid=\"chatgpt-logo\"],svg[aria-label=\"ChatGPT\"],"
+    "article button,article [role=\"group\"],.avatar{display:none!important}"
+    "html,body,body :where(div,section,article,main,form,header,footer,nav,aside,textarea,[contenteditable]){background:transparent!important;border-color:transparent!important;box-shadow:none!important;border-radius:0!important}"
+    "body,body :where(p,span,li,div,textarea,[contenteditable],h1,h2,h3,h4,pre,code,button,a){color:${window.__cronqCamoText}!important}"
+    "main{padding-top:0!important}"
+    "textarea:focus-visible,[contenteditable]:focus-visible{outline:none!important}"
+    "button[data-testid=\"send-button\"] svg{display:none!important}"
+    "button[data-testid=\"send-button\"]::after{content:'Send';font-size:12px}"
+    "button[data-testid=\"send-button\"]{color:${window.__cronqCamoText}!important;background:transparent!important;border:0!important}`;"
+    "if(style.textContent!==css)style.textContent=css;};"
+    "window.__cronqCamo=(t)=>{window.__cronqCamoText=t;apply();};"
+    "document.addEventListener('DOMContentLoaded',apply,{once:true});}"
+    "window.__cronqCamo(TEXT);})();";
+
+/* Canvas colour only; pages keep their own colour scheme. */
+static void browser_theme_view(WebKitWebView *view) {
+    if (!view) return;
+    ThemeMode mode = theme_get_mode();
+    GdkRGBA bg;
+    if (theme_is_camo())           { bg.red = bg.green = bg.blue = 0.0; bg.alpha = 0.0; }
+    else if (mode == THEME_LIGHT)  { bg.red = bg.green = bg.blue = 1.0; bg.alpha = 1.0; }
+    else                           { bg.red = bg.green = bg.blue = 0.0; bg.alpha = 1.0; }
+    webkit_web_view_set_background_color(view, &bg);
+}
+
+
+static void chatgpt_install_scripts(bool run_now) {
+    if (!s_view_chatgpt) return;
+    WebKitUserContentManager *ucm = webkit_web_view_get_user_content_manager(s_view_chatgpt);
+    webkit_user_content_manager_remove_all_scripts(ucm);
+
+    WebKitUserScript *enter = webkit_user_script_new(s_chatgpt_enter_script, WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES,
+                                                     WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_END, NULL, NULL);
+    webkit_user_content_manager_add_script(ucm, enter);
+    webkit_user_script_unref(enter);
+
+    if (!theme_is_camo()) {
+        /* Leaving camouflage: drop the injected style in place; the page keeps its state (no reload). */
+        if (run_now) {
+            const char *undo = "(()=>{const s=document.getElementById('cronq-camo');if(s)s.remove();delete window.__cronqCamo;})();";
+#if WEBKIT_CHECK_VERSION(2, 40, 0)
+            webkit_web_view_evaluate_javascript(s_view_chatgpt, undo, -1, NULL, NULL, NULL, NULL, NULL);
+#else
+            webkit_web_view_run_javascript(s_view_chatgpt, undo, NULL, NULL, NULL);
+#endif
+        }
+        return;
+    }
+    char *js = g_strdup_printf(s_camo_chatgpt_js, theme_fg_hex());
+    WebKitUserScript *th = webkit_user_script_new(js, WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES,
+                                                  WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START, NULL, NULL);
+    webkit_user_content_manager_add_script(ucm, th);
+    webkit_user_script_unref(th);
+    if (run_now) {   /* live, no reload */
+#if WEBKIT_CHECK_VERSION(2, 40, 0)
+        webkit_web_view_evaluate_javascript(s_view_chatgpt, js, -1, NULL, NULL, NULL, NULL, NULL);
+#else
+        webkit_web_view_run_javascript(s_view_chatgpt, js, NULL, NULL, NULL);
+#endif
+    }
+    g_free(js);
+}
+
+void browser_apply_theme(int mode) {
+    (void)mode;
+    browser_theme_view(s_view_browser);
+    browser_theme_view(s_view_chatgpt);
+    if (s_active_popup && WEBKIT_IS_WEB_VIEW(s_active_popup)) browser_theme_view(s_active_popup);
+    chatgpt_install_scripts(true);
+}
+
 static void configure_webview(WebKitWebView *view, const AppConfig *cfg) {
     WebKitSettings *settings = webkit_web_view_get_settings(view);
     webkit_settings_set_user_agent(settings, cfg->user_agent);
@@ -410,8 +495,7 @@ static void configure_webview(WebKitWebView *view, const AppConfig *cfg) {
     webkit_settings_set_enable_media_stream(settings, TRUE);
     webkit_settings_set_enable_webaudio(settings, TRUE);
 
-    GdkRGBA bg = {0.0, 0.0, 0.0, 1.0};
-    webkit_web_view_set_background_color(view, &bg);
+    browser_theme_view(view);
 
     gtk_widget_add_events(GTK_WIDGET(view), GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK);
     g_signal_connect(view, "button-press-event", G_CALLBACK(on_webview_button_press), NULL);
@@ -482,17 +566,8 @@ bool browser_init(void) {
     configure_webview(s_view_chatgpt, cfg);
     s_scroll_chatgpt = create_scrolled_container(s_view_chatgpt, cfg->width);
 
-    /* Inject Enter-to-Submit UserScript into ChatGPT view */
-    WebKitUserContentManager *ucm = webkit_web_view_get_user_content_manager(s_view_chatgpt);
-    WebKitUserScript *us = webkit_user_script_new(
-        s_chatgpt_enter_script,
-        WEBKIT_USER_CONTENT_INJECT_ALL_FRAMES,
-        WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_END,
-        NULL,
-        NULL
-    );
-    webkit_user_content_manager_add_script(ucm, us);
-    webkit_user_script_unref(us);
+    /* Enter-to-Submit + theme scripts for the ChatGPT view */
+    chatgpt_install_scripts(false);
 
     /* Preload ChatGPT */
     webkit_web_view_load_uri(s_view_chatgpt, "https://chatgpt.com");

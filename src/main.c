@@ -5,6 +5,9 @@
 #include "config.h"
 #include "browser.h"
 #include "ghost.h"
+#include "theme.h"
+#include "killswitch.h"
+#include "capture_guard.h"
 #include "xutil.h"
 
 #include <X11/Xlib.h>
@@ -197,7 +200,35 @@ static gboolean on_ipc_client_connected(GIOChannel *source, GIOCondition conditi
         } else if (g_ascii_strcasecmp(line, "RELOAD_CONFIG") == 0) {
             config_reload();
             overlay_apply_config();
+            theme_reload_from_config();
+            capture_guard_reload_config();
             hotkey_reload_grabs();
+        } else if (g_ascii_strcasecmp(line, "GET_THEME") == 0) {
+            snprintf(resp, sizeof(resp), "THEME=%d LABEL=%s\n", (int)theme_get_mode(), theme_mode_label());
+        } else if (g_str_has_prefix(line, "SET_THEME ")) {
+            theme_set_mode((ThemeMode)atoi(line + 10));
+        } else if (g_ascii_strcasecmp(line, "CAMO") == 0) {
+            theme_toggle_camo();
+        } else if (g_ascii_strcasecmp(line, "TEXT_COLOR") == 0) {
+            theme_toggle_text();
+        } else if (g_ascii_strcasecmp(line, "DOCK_LEFT") == 0) {
+            overlay_dock_corner("bottom-left");
+        } else if (g_ascii_strcasecmp(line, "DOCK_RIGHT") == 0) {
+            overlay_dock_corner("bottom-right");
+        } else if (g_ascii_strcasecmp(line, "LOCK") == 0) {
+            hotkey_set_locked(true);
+        } else if (g_ascii_strcasecmp(line, "UNLOCK") == 0) {
+            hotkey_set_locked(false);
+        } else if (g_ascii_strcasecmp(line, "GET_CAPTURE") == 0) {
+            snprintf(resp, sizeof(resp), "HELD=%s\n", capture_guard_is_active() ? "TRUE" : "FALSE");
+        } else if (g_ascii_strcasecmp(line, "GET_LOCK") == 0) {
+            snprintf(resp, sizeof(resp), "LOCKED=%s\n", hotkey_is_locked() ? "TRUE" : "FALSE");
+        } else if (g_ascii_strcasecmp(line, "KILL_PROMPT") == 0) {
+            killswitch_prompt_show();
+        } else if (g_ascii_strcasecmp(line, "KILL_PROMPT_CANCEL") == 0) {
+            killswitch_prompt_cancel();
+        } else if (g_ascii_strcasecmp(line, "KILL_PROMPT_ACTIVE") == 0) {
+            snprintf(resp, sizeof(resp), "%s\n", killswitch_prompt_active() ? "TRUE" : "FALSE");
         } else if (g_ascii_strcasecmp(line, "STATUS") == 0) {
             snprintf(resp, sizeof(resp), "MODE=%s TARGET=%s GHOST=%s GRAB=%s VISIBLE=%s APP=%s\n",
                      input_get_key_mode() == KEY_MODE_EXCLUSIVE ? "EXCLUSIVE" : "MIRROR",
@@ -298,6 +329,8 @@ static gboolean on_sighup_signal(gpointer user_data) {
     xutil_log("MAIN", "SIGHUP received. Reloading configuration...");
     config_reload();
     overlay_apply_config();
+    theme_reload_from_config();
+    capture_guard_reload_config();
     hotkey_reload_grabs();
     return G_SOURCE_CONTINUE;
 }
@@ -659,6 +692,7 @@ int main(int argc, char **argv) {
     }
 
     const AppConfig *cfg = config_get();
+    theme_init(cfg->appearance_mode);
     gboolean start_visible = cfg->start_visible;
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--show") == 0 || strcmp(argv[i], "show") == 0) {
@@ -731,6 +765,9 @@ int main(int argc, char **argv) {
         config_cleanup();
         return 1;
     }
+
+    /* 9b. Capture guard: hide the overlay while other programs capture the screen */
+    capture_guard_init();
 
     /* 10. Setup UNIX signal handlers */
     g_unix_signal_add(SIGINT, on_shutdown_signal, NULL);

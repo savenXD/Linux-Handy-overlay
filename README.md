@@ -132,7 +132,13 @@ All shortcuts work globally while holding **Alt**.
 | **Alt + P** | Clean screenshot |
 | **Alt + M** | Typing mode: Mirror ⇄ Exclusive |
 | **Alt + W** | Start / cancel Ghost Writer |
-| **Alt + K** · **Alt + K + X** · **Alt + Shift + K** | Lock · Unlock · Kill switch *(Windows)* |
+| **Alt + C** | Camouflage on / off (transparent, text only) |
+| **Alt + T** | Text colour: black ⇄ white (Light ⇄ Dark when not camouflaged) |
+| **Alt + ←** / **Alt + →** | Dock bottom-left / bottom-right (remembered) |
+| **Alt + K** · **Alt + K + X** | Lock (hide + disable all shortcuts) · Unlock |
+| **Alt + Shift + K** | Kill switch: Enter removes Cronq and all its data, Esc cancels |
+
+**Appearance:** the top-left button cycles Dark → Light → Camo; the choice is saved under `[Appearance] mode` (0 Dark, 1 Light, 2 Camo black text *(default)*, 3 Camo white text). Camouflage needs a compositing window manager. Hiding the overlay from screen recorders is Windows-only: X11 has no per-window capture exclusion.
 
 **Mouse:** drag the top handle to move, drag the bottom-right corner (or edges on Windows) to resize. The bottom bar has Back, Home, Reset, Typer and Snap.
 

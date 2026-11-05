@@ -13,6 +13,16 @@ fi
 
 mkdir -p "$DATA_DIR"
 
+# Rotate the crash log at startup (keep one previous generation, 1 MiB limit)
+if [ -f "$CRASH_LOG" ] && [ "$(stat -c %s "$CRASH_LOG" 2>/dev/null || echo 0)" -gt 1048576 ]; then
+    mv -f "$CRASH_LOG" "$CRASH_LOG.1"
+fi
+
+# Rotate the crash log at startup (keep one previous generation, 1 MiB limit)
+if [ -f "$CRASH_LOG" ] && [ "$(stat -c %s "$CRASH_LOG" 2>/dev/null || echo 0)" -gt 1048576 ]; then
+    mv -f "$CRASH_LOG" "$CRASH_LOG.1"
+fi
+
 CHILD_PID=""
 
 cleanup() {

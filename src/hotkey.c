@@ -4,6 +4,8 @@
 #include "input.h"
 #include "ghost.h"
 #include "xutil.h"
+#include "theme.h"
+#include "killswitch.h"
 
 #include <X11/Xlib.h>
 #include <X11/keysym.h>
@@ -49,6 +51,15 @@ static bool       s_d_key_down = false;
 static bool       s_p_key_down = false;
 static bool       s_m_key_down = false;
 static bool       s_w_key_down = false;
+
+/* Lock / kill switch / theme / corner hotkeys */
+static bool       s_locked = false;
+static gint64     s_last_lock_time = 0;
+static gint64     s_last_camo_time = 0;
+static gint64     s_last_text_time = 0;
+static gint64     s_last_dock_time = 0;
+static gint64     s_last_kill_time = 0;
+static bool       s_prompt_grabs_on = false;
 
 /* Raw event modifier tracking for resilience against external grabs */
 static bool       s_raw_ctrl_down = false;
@@ -96,6 +107,12 @@ static KeyCode s_hk_d_l = 0, s_hk_d_u = 0;
 static KeyCode s_hk_p_l = 0, s_hk_p_u = 0;
 static KeyCode s_hk_m_l = 0, s_hk_m_u = 0;
 static KeyCode s_hk_w_l = 0, s_hk_w_u = 0;
+static KeyCode s_hk_c_l = 0, s_hk_c_u = 0;
+static KeyCode s_hk_t_l = 0, s_hk_t_u = 0;
+static KeyCode s_hk_k_l = 0, s_hk_k_u = 0;
+static KeyCode s_hk_left = 0, s_hk_right = 0;
+static KeyCode s_hk_ux_l = 0, s_hk_ux_u = 0;      /* literal X: the unlock chord is always Alt+K+X */
+static KeyCode s_kc_return = 0, s_kc_kp_enter = 0, s_kc_escape = 0;
 
 static void hotkey_refresh_modifier_cache(Display *dpy) {
     if (!dpy) return;
@@ -179,6 +196,20 @@ static void hotkey_refresh_modifier_cache(Display *dpy) {
     s_hk_m_u = XKeysymToKeycode(dpy, char_to_keysym_upper(m_c));
     s_hk_w_l = XKeysymToKeycode(dpy, char_to_keysym_lower(w_c));
     s_hk_w_u = XKeysymToKeycode(dpy, char_to_keysym_upper(w_c));
+
+    s_hk_c_l = XKeysymToKeycode(dpy, XK_c);
+    s_hk_c_u = XKeysymToKeycode(dpy, XK_C);
+    s_hk_t_l = XKeysymToKeycode(dpy, XK_t);
+    s_hk_t_u = XKeysymToKeycode(dpy, XK_T);
+    s_hk_k_l = XKeysymToKeycode(dpy, XK_k);
+    s_hk_k_u = XKeysymToKeycode(dpy, XK_K);
+    s_hk_left = XKeysymToKeycode(dpy, XK_Left);
+    s_hk_right = XKeysymToKeycode(dpy, XK_Right);
+    s_hk_ux_l = XKeysymToKeycode(dpy, XK_x);
+    s_hk_ux_u = XKeysymToKeycode(dpy, XK_X);
+    s_kc_return = XKeysymToKeycode(dpy, XK_Return);
+    s_kc_kp_enter = XKeysymToKeycode(dpy, XK_KP_Enter);
+    s_kc_escape = XKeysymToKeycode(dpy, XK_Escape);
 }
 
 static inline bool is_ctrl_keycode(KeyCode kc) {
@@ -214,7 +245,12 @@ static inline bool is_hotkey_candidate(KeyCode kc) {
             kc == s_hk_d_l || (s_hk_d_u && kc == s_hk_d_u) ||
             kc == s_hk_p_l || (s_hk_p_u && kc == s_hk_p_u) ||
             kc == s_hk_m_l || (s_hk_m_u && kc == s_hk_m_u) ||
-            kc == s_hk_w_l || (s_hk_w_u && kc == s_hk_w_u));
+            kc == s_hk_w_l || (s_hk_w_u && kc == s_hk_w_u) ||
+            kc == s_hk_c_l || (s_hk_c_u && kc == s_hk_c_u) ||
+            kc == s_hk_t_l || (s_hk_t_u && kc == s_hk_t_u) ||
+            kc == s_hk_k_l || (s_hk_k_u && kc == s_hk_k_u) ||
+            kc == s_hk_ux_l || (s_hk_ux_u && kc == s_hk_ux_u) ||
+            (s_hk_left && kc == s_hk_left) || (s_hk_right && kc == s_hk_right));
 }
 
 static bool is_alt_physically_down(Display *dpy) {
@@ -250,6 +286,24 @@ static bool is_alt_physically_down(Display *dpy) {
     if (s_raw_shift_down) shift_down = true;
 
     return (alt_down && !ctrl_down && !shift_down);
+}
+
+/* Alt+Shift (no Ctrl) physically held: used for the Alt+Shift+K kill switch. */
+static bool is_alt_shift_physically_down(Display *dpy) {
+    char keys[32];
+    XQueryKeymap(dpy, keys);
+    bool alt_down = false, ctrl_down = false, shift_down = false;
+    for (int i = 0; i < s_cached_alt_count; i++)   if (is_keycode_down(keys, s_cached_alt_keycodes[i]))   { alt_down = true;   break; }
+    for (int i = 0; i < s_cached_ctrl_count; i++)  if (is_keycode_down(keys, s_cached_ctrl_keycodes[i]))  { ctrl_down = true;  break; }
+    for (int i = 0; i < s_cached_shift_count; i++) if (is_keycode_down(keys, s_cached_shift_keycodes[i])) { shift_down = true; break; }
+    if (s_raw_ctrl_down) ctrl_down = true;
+    return alt_down && shift_down && !ctrl_down;
+}
+
+static bool is_key_physically_down(Display *dpy, KeyCode a, KeyCode b) {
+    char keys[32];
+    XQueryKeymap(dpy, keys);
+    return is_keycode_down(keys, a) || is_keycode_down(keys, b);
 }
 
 GdkModifierType hotkey_get_active_modifiers(void) {
@@ -393,6 +447,128 @@ static void trigger_ghost_write(const char *source_desc) {
     ghost_writer_run();
 }
 
+static inline bool is_kc(KeyCode kc, KeyCode l, KeyCode u) {
+    return kc != 0 && (kc == l || (u != 0 && kc == u));
+}
+
+static void register_passive_grabs(void);
+static void unregister_passive_grabs(void);
+
+void hotkey_set_locked(bool locked) {
+    if (s_locked == locked) return;
+    s_locked = locked;
+    if (locked) {
+        xutil_log("HOTKEY", "LOCKED: hiding overlay and disabling all hotkeys except Alt+K+X / Alt+Shift+K.");
+        ghost_writer_cancel();
+        input_release_grab();
+        overlay_hide();
+        if (hotkey_is_clipboard_shield_active()) hotkey_remove_clipboard_shield();
+    } else {
+        xutil_log("HOTKEY", "UNLOCKED: hotkeys restored.");
+    }
+    if (s_hotkey_dpy) {
+        unregister_passive_grabs();
+        register_passive_grabs();
+    }
+    if (!locked) {
+        overlay_show();
+        overlay_show_toast("Unlocked");
+    }
+}
+
+bool hotkey_is_locked(void) {
+    return s_locked;
+}
+
+static bool dedupe_ok(gint64 *last, gint64 window_us, const char *what, const char *src) {
+    gint64 now = g_get_monotonic_time();
+    if (now - *last < window_us) {
+        xutil_log("HOTKEY", "Deduped %s from %s", what, src);
+        return false;
+    }
+    *last = now;
+    return true;
+}
+
+/* Extended hotkeys: lock/unlock, kill switch, camouflage, text colour, corner docking.
+ * Returns true when the key was consumed (including keys deliberately swallowed while locked). */
+static bool dispatch_extended_hotkey(KeyCode kc, bool alt_shift, const char *src) {
+    if (alt_shift) {
+        if (is_kc(kc, s_hk_k_l, s_hk_k_u)) {
+            if (dedupe_ok(&s_last_kill_time, 300000, "kill prompt", src)) {
+                xutil_log("HOTKEY", "Alt+Shift+K triggered via %s -> Kill switch prompt", src);
+                killswitch_prompt_show();
+            }
+            return true;
+        }
+        return false;
+    }
+
+    if (s_locked) {
+        bool is_k = is_kc(kc, s_hk_k_l, s_hk_k_u);
+        bool is_x = is_kc(kc, s_hk_ux_l, s_hk_ux_u);
+        if (!is_k && !is_x) return false;
+        bool partner = is_k ? is_key_physically_down(s_hotkey_dpy, s_hk_ux_l, s_hk_ux_u)
+                            : is_key_physically_down(s_hotkey_dpy, s_hk_k_l, s_hk_k_u);
+        if (partner && dedupe_ok(&s_last_lock_time, 250000, "unlock", src)) {
+            xutil_log("HOTKEY", "Alt+K+X chord via %s -> Unlock", src);
+            hotkey_set_locked(false);
+        }
+        return true;   /* Alt+K / Alt+X are swallowed while locked */
+    }
+
+    if (is_kc(kc, s_hk_k_l, s_hk_k_u)) {
+        if (dedupe_ok(&s_last_lock_time, 250000, "lock", src)) {
+            xutil_log("HOTKEY", "Alt+K triggered via %s -> Lock", src);
+            hotkey_set_locked(true);
+        }
+        return true;
+    }
+    if (is_kc(kc, s_hk_c_l, s_hk_c_u)) {
+        if (dedupe_ok(&s_last_camo_time, 250000, "camouflage", src)) {
+            xutil_log("HOTKEY", "Alt+C triggered via %s -> Toggle camouflage", src);
+            theme_toggle_camo();
+        }
+        return true;
+    }
+    if (is_kc(kc, s_hk_t_l, s_hk_t_u)) {
+        if (dedupe_ok(&s_last_text_time, 250000, "text colour", src)) {
+            xutil_log("HOTKEY", "Alt+T triggered via %s -> Toggle text colour", src);
+            theme_toggle_text();
+        }
+        return true;
+    }
+    if (is_kc(kc, s_hk_left, 0) || is_kc(kc, s_hk_right, 0)) {
+        if (dedupe_ok(&s_last_dock_time, 200000, "dock", src)) {
+            bool left = is_kc(kc, s_hk_left, 0);
+            xutil_log("HOTKEY", "Alt+%s triggered via %s -> Dock %s", left ? "Left" : "Right", src, left ? "bottom-left" : "bottom-right");
+            overlay_dock_corner(left ? "bottom-left" : "bottom-right");
+        }
+        return true;
+    }
+    return false;
+}
+
+void hotkey_set_prompt_grabs(bool on) {
+    if (!s_hotkey_dpy || s_root == None) return;
+    KeyCode kcs[] = { s_kc_return, s_kc_kp_enter, s_kc_escape };
+    for (size_t i = 0; i < sizeof(kcs) / sizeof(kcs[0]); i++) {
+        if (!kcs[i]) continue;
+        if (on) XGrabKey(s_hotkey_dpy, kcs[i], AnyModifier, s_root, False, GrabModeAsync, GrabModeAsync);
+        else    XUngrabKey(s_hotkey_dpy, kcs[i], AnyModifier, s_root);
+    }
+    XSync(s_hotkey_dpy, False);
+    s_prompt_grabs_on = on;
+}
+
+/* Returns true if the key was consumed by the kill prompt (Enter confirms, Esc cancels). */
+static bool handle_prompt_key(KeyCode kc) {
+    if (!killswitch_prompt_active()) return false;
+    if (kc != 0 && (kc == s_kc_return || kc == s_kc_kp_enter)) { killswitch_prompt_confirm(); return true; }
+    if (kc != 0 && kc == s_kc_escape) { killswitch_prompt_cancel(); return true; }
+    return false;
+}
+
 static void handle_raw_key_press(int detail) {
     if (!s_hotkey_dpy) return;
     if (ghost_is_guard_active()) return;
@@ -406,6 +582,8 @@ static void handle_raw_key_press(int detail) {
 
     KeyCode kc = (KeyCode)detail;
 
+    if (handle_prompt_key(kc)) return;
+
     /* Fast modifier tracking */
     if (is_ctrl_keycode(kc))  s_raw_ctrl_down = true;
     if (is_shift_keycode(kc)) s_raw_shift_down = true;
@@ -414,6 +592,12 @@ static void handle_raw_key_press(int detail) {
     /* If not a hotkey candidate, forward to overlay/background immediately with 0 X11 queries */
     if (!is_hotkey_candidate(kc)) {
         input_handle_raw_key(detail, true);
+        return;
+    }
+
+    /* Alt+Shift+K kill switch (works even while locked) */
+    if (is_kc(kc, s_hk_k_l, s_hk_k_u) && is_alt_shift_physically_down(s_hotkey_dpy)) {
+        dispatch_extended_hotkey(kc, true, "XInput2 Raw Event");
         return;
     }
 
@@ -428,6 +612,12 @@ static void handle_raw_key_press(int detail) {
         s_p_key_down = false;
         s_m_key_down = false;
         s_w_key_down = false;
+        input_handle_raw_key(detail, true);
+        return;
+    }
+
+    if (dispatch_extended_hotkey(kc, false, "XInput2 Raw Event")) return;
+    if (s_locked) {
         input_handle_raw_key(detail, true);
         return;
     }
@@ -671,10 +861,21 @@ static void hotkey_process_events(void) {
                 }
             }
 
-            /* 2. Global hotkeys (Alt+X / G / A / S / F / D / P / M / W) */
+            /* 1b. Kill prompt keys (Enter / Esc) */
+            if (handle_prompt_key(ev.xkey.keycode)) continue;
+
+            /* 1c. Alt+Shift+K kill switch */
+            if ((ev.xkey.state & Mod1Mask) && (ev.xkey.state & ShiftMask) && !(ev.xkey.state & ControlMask)) {
+                dispatch_extended_hotkey(ev.xkey.keycode, true, "Passive XGrabKey");
+                continue;
+            }
+
+            /* 2. Global hotkeys (Alt+X / G / A / S / F / D / P / M / W, plus C / T / K / Left / Right) */
             if ((ev.xkey.state & Mod1Mask) == 0 || !is_alt_physically_down(s_hotkey_dpy)) {
                 continue;
             }
+            if (dispatch_extended_hotkey(ev.xkey.keycode, false, "Passive XGrabKey")) continue;
+            if (s_locked) continue;
 
             KeyCode x_l, x_u, g_l, g_u, a_l, a_u, s_l, s_u, f_l, f_u, d_l, d_u, p_l, p_u, m_l, m_u, w_l, w_u;
             get_hotkey_keycodes(s_hotkey_dpy,
@@ -788,72 +989,62 @@ static GSourceFuncs s_hotkey_source_funcs = {
     NULL, NULL, NULL
 };
 
-static void register_passive_grabs(void) {
-    if (!s_hotkey_dpy || s_root == None) return;
+/* Fills the keycodes to grab with Alt. Locked: only K and X (unlock chord). */
+static size_t build_grab_list(KeyCode *out, size_t max, bool locked) {
+    size_t n = 0;
+    #define ADD(k) do { if ((k) != 0 && n < max) out[n++] = (k); } while (0)
+    ADD(s_hk_k_l); ADD(s_hk_k_u);
+    ADD(s_hk_ux_l); ADD(s_hk_ux_u);
+    if (!locked) {
+        ADD(s_hk_x_l); ADD(s_hk_x_u);
+        ADD(s_hk_g_l); ADD(s_hk_g_u);
+        ADD(s_hk_a_l); ADD(s_hk_a_u);
+        ADD(s_hk_s_l); ADD(s_hk_s_u);
+        ADD(s_hk_f_l); ADD(s_hk_f_u);
+        ADD(s_hk_d_l); ADD(s_hk_d_u);
+        ADD(s_hk_p_l); ADD(s_hk_p_u);
+        ADD(s_hk_m_l); ADD(s_hk_m_u);
+        ADD(s_hk_w_l); ADD(s_hk_w_u);
+        ADD(s_hk_c_l); ADD(s_hk_c_u);
+        ADD(s_hk_t_l); ADD(s_hk_t_u);
+        ADD(s_hk_left); ADD(s_hk_right);
+    }
+    #undef ADD
+    return n;
+}
 
-    KeyCode x_l, x_u, g_l, g_u, a_l, a_u, s_l, s_u, f_l, f_u, d_l, d_u, p_l, p_u, m_l, m_u, w_l, w_u;
-    get_hotkey_keycodes(s_hotkey_dpy,
-                        &x_l, &x_u, &g_l, &g_u, &a_l, &a_u, &s_l, &s_u,
-                        &f_l, &f_u, &d_l, &d_u, &p_l, &p_u, &m_l, &m_u, &w_l, &w_u);
-
-    KeyCode hotkey_kcs[] = {
-        x_l, x_u,
-        g_l, g_u,
-        a_l, a_u,
-        s_l, s_u,
-        f_l, f_u,
-        d_l, d_u,
-        p_l, p_u,
-        m_l, m_u,
-        w_l, w_u
-    };
-    size_t num_kcs = sizeof(hotkey_kcs) / sizeof(hotkey_kcs[0]);
-
-    unsigned int base_mods = Mod1Mask; /* Alt */
-
+static void grab_or_ungrab(bool grab, bool locked) {
+    KeyCode kcs[40];
+    size_t n = build_grab_list(kcs, sizeof(kcs) / sizeof(kcs[0]), locked);
     for (size_t i = 0; i < NUM_LOCK_COMBOS; i++) {
-        unsigned int mods = base_mods | s_lock_combos[i];
-        for (size_t k = 0; k < num_kcs; k++) {
-            if (hotkey_kcs[k] != 0) {
-                XGrabKey(s_hotkey_dpy, hotkey_kcs[k], mods, s_root, False, GrabModeAsync, GrabModeAsync);
-            }
+        for (size_t k = 0; k < n; k++) {
+            unsigned int mods = Mod1Mask | s_lock_combos[i];
+            if (grab) XGrabKey(s_hotkey_dpy, kcs[k], mods, s_root, False, GrabModeAsync, GrabModeAsync);
+            else      XUngrabKey(s_hotkey_dpy, kcs[k], mods, s_root);
+        }
+        /* Alt+Shift+K kill switch is always armed */
+        KeyCode kk[2] = { s_hk_k_l, s_hk_k_u };
+        for (int j = 0; j < 2; j++) {
+            if (!kk[j]) continue;
+            unsigned int mods = Mod1Mask | ShiftMask | s_lock_combos[i];
+            if (grab) XGrabKey(s_hotkey_dpy, kk[j], mods, s_root, False, GrabModeAsync, GrabModeAsync);
+            else      XUngrabKey(s_hotkey_dpy, kk[j], mods, s_root);
         }
     }
+}
+
+static void register_passive_grabs(void) {
+    if (!s_hotkey_dpy || s_root == None) return;
+    grab_or_ungrab(true, s_locked);
     XSync(s_hotkey_dpy, False);
-    xutil_log("HOTKEY", "Registered passive XGrabKey for Alt+x/g/a/s/f/d/p/m/w across lock variations.");
+    xutil_log("HOTKEY", "Registered passive XGrabKey for %s across lock variations.",
+              s_locked ? "Alt+K / Alt+X (locked) and Alt+Shift+K"
+                       : "Alt+x/g/a/s/f/d/p/m/w/c/t/k/Left/Right and Alt+Shift+K");
 }
 
 static void unregister_passive_grabs(void) {
     if (!s_hotkey_dpy || s_root == None) return;
-
-    KeyCode x_l, x_u, g_l, g_u, a_l, a_u, s_l, s_u, f_l, f_u, d_l, d_u, p_l, p_u, m_l, m_u, w_l, w_u;
-    get_hotkey_keycodes(s_hotkey_dpy,
-                        &x_l, &x_u, &g_l, &g_u, &a_l, &a_u, &s_l, &s_u,
-                        &f_l, &f_u, &d_l, &d_u, &p_l, &p_u, &m_l, &m_u, &w_l, &w_u);
-
-    KeyCode hotkey_kcs[] = {
-        x_l, x_u,
-        g_l, g_u,
-        a_l, a_u,
-        s_l, s_u,
-        f_l, f_u,
-        d_l, d_u,
-        p_l, p_u,
-        m_l, m_u,
-        w_l, w_u
-    };
-    size_t num_kcs = sizeof(hotkey_kcs) / sizeof(hotkey_kcs[0]);
-
-    unsigned int base_mods = Mod1Mask; /* Alt */
-
-    for (size_t i = 0; i < NUM_LOCK_COMBOS; i++) {
-        unsigned int mods = base_mods | s_lock_combos[i];
-        for (size_t k = 0; k < num_kcs; k++) {
-            if (hotkey_kcs[k] != 0) {
-                XUngrabKey(s_hotkey_dpy, hotkey_kcs[k], mods, s_root);
-            }
-        }
-    }
+    grab_or_ungrab(false, false);   /* release the superset so nothing lingers across lock changes */
     XFlush(s_hotkey_dpy);
     xutil_log("HOTKEY", "Released all passive XGrabKey grabs.");
 }

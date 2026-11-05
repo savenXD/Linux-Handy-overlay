@@ -4,9 +4,9 @@ INCLUDES = $(shell pkg-config --cflags gtk+-3.0 webkit2gtk-4.1 x11 xi xext xrand
 LIBS = $(shell pkg-config --libs gtk+-3.0 webkit2gtk-4.1 x11 xi xext xrandr xtst) -lm
 
 TARGET = bin/cronq
-SRCS = src/main.c src/window.c src/hotkey.c src/raise.c src/xutil.c src/input.c src/config.c src/browser.c src/ghost.c
+SRCS = src/main.c src/window.c src/hotkey.c src/raise.c src/xutil.c src/input.c src/config.c src/browser.c src/ghost.c src/theme.c src/killswitch.c src/capture_guard.c
 OBJS = $(SRCS:.c=.o)
-HEADERS = src/window.h src/hotkey.h src/raise.h src/xutil.h src/input.h src/config.h src/browser.h src/ghost.h
+HEADERS = src/window.h src/hotkey.h src/raise.h src/xutil.h src/input.h src/config.h src/browser.h src/ghost.h src/theme.h src/killswitch.h src/capture_guard.h
 
 ADVERSARIES = tests/stackcheck tests/adversary/adv1_ewmh tests/adversary/adv2_override tests/adversary/adv3_focuslock
 TEST_BINS = $(ADVERSARIES) tests/colorwin

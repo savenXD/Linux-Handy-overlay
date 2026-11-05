@@ -46,6 +46,9 @@ static void set_defaults(AppConfig *cfg) {
     g_strlcpy(cfg->ghost_newline, "space", sizeof(cfg->ghost_newline));
     g_strlcpy(cfg->ghost_tab, "space", sizeof(cfg->ghost_tab));
     cfg->ghost_max_chars = 100000;
+
+    cfg->hide_from_capture = true;
+    cfg->appearance_mode = -1;   /* auto: camouflage, text colour follows the system theme */
 }
 
 static void create_default_config_file(const char *path) {
@@ -281,6 +284,14 @@ static void load_from_key_file(GKeyFile *kf, AppConfig *cfg) {
     }
     g_clear_error(&err);
 
+    int amode = g_key_file_get_integer(kf, "Appearance", "mode", &err);
+    if (!err && amode >= 0 && amode <= 3) cfg->appearance_mode = amode;
+    g_clear_error(&err);
+
+    gboolean hfc = g_key_file_get_boolean(kf, "Privacy", "hide_from_capture", &err);
+    if (!err) cfg->hide_from_capture = hfc;
+    g_clear_error(&err);
+
     int gmax = g_key_file_get_integer(kf, "GhostWriter", "ghost_max_chars", &err);
     if (!err && gmax >= 0 && gmax <= 5000000) {
         cfg->ghost_max_chars = gmax;
@@ -328,6 +339,25 @@ bool config_reload(void) {
         g_key_file_free(kf);
         return false;
     }
+}
+
+bool config_save_value(const char *group, const char *key, const char *value) {
+    if (s_config_path[0] == '\0') return false;
+    GKeyFile *kf = g_key_file_new();
+    GError *err = NULL;
+    if (!g_key_file_load_from_file(kf, s_config_path,
+                                   G_KEY_FILE_KEEP_COMMENTS | G_KEY_FILE_KEEP_TRANSLATIONS, &err)) {
+        g_clear_error(&err);
+    }
+    g_key_file_set_string(kf, group, key, value);
+    bool ok = g_key_file_save_to_file(kf, s_config_path, &err);
+    if (!ok) {
+        xutil_log_err("CONFIG", "Failed to save %s.%s: %s", group, key, err->message);
+        g_error_free(err);
+    }
+    g_key_file_free(kf);
+    if (ok) config_reload();
+    return ok;
 }
 
 const AppConfig *config_get(void) {

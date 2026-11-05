@@ -16,4 +16,11 @@ void            hotkey_drain_pending_events(void);
 void            hotkey_sync_raw_modifiers(void);
 GdkModifierType hotkey_get_active_modifiers(void);
 
+/* Lock: hides the overlay and disables every hotkey except Alt+K, Alt+X (unlock chord) and Alt+Shift+K. */
+void            hotkey_set_locked(bool locked);
+bool            hotkey_is_locked(void);
+
+/* Kill-switch prompt keys: while the prompt is visible Enter/Esc are grabbed globally. */
+void            hotkey_set_prompt_grabs(bool on);
+
 #endif /* HOTKEY_H */

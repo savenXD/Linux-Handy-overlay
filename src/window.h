@@ -36,6 +36,9 @@ void        overlay_queue_draw(void);
 void        overlay_set_ghost(gboolean ghost);
 void        overlay_set_active_focus(gboolean active);
 void        overlay_apply_config(void);
+void        overlay_apply_theme(void);
+void        overlay_set_capture_hidden(gboolean hidden);   /* capture guard: unmap/map without changing visibility intent */
+void        overlay_dock_corner(const char *corner);
 void        overlay_set_opacity(double opacity);
 double      overlay_get_opacity(void);
 void        overlay_set_size(int width, int height);
