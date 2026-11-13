@@ -1,5 +1,7 @@
 #include "god_copy.h"
 #include "god_copy_protocol.h"
+#include <objbase.h>
+#include <oleauto.h>
 #include <uiautomation.h>
 #include <wrl/client.h>
 #include <algorithm>
