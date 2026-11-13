@@ -1,0 +1,5 @@
+# Keep original evidence bytes stable across Linux/Windows clones and SHA-256 checks.
+* -text
+# The original Windows log has CRLF; the preserved patch has required context spaces.
+*.jsonl whitespace=cr-at-eol
+*.patch -whitespace

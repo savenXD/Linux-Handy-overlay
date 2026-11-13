@@ -4,6 +4,12 @@ By default, Windows User Interface Privilege Isolation (UIPI) prevents standard-
 
 For power users who need Cronq to overlay elevated applications (e.g., elevated command prompts, Task Manager, admin utilities), Windows provides the **UIAccess** privilege.
 
+UIAccess is not a general override for display-affinity restrictions, protected
+video or secure-desktop capture. No UIAccess or administrator-mode fix has been
+demonstrated for Deepak's focus app. Its screenshot issue remains open; follow
+the [screenshot investigation](SCREENSHOT_INVESTIGATION.md) rather than treating
+this signing/install procedure as a capture-protection solution.
+
 ---
 
 ## Prerequisites for UIAccess

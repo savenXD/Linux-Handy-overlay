@@ -1,5 +1,19 @@
 # Windows parity and verification
 
+## Current screenshot status — 2026-11-13
+
+**Deepak's protected focus-app capture remains OPEN: the user reports that the
+implemented solutions did not work.** No target binary, per-backend logs or
+controlled native reproduction has been supplied. Source review confirmed that
+the foreground-affinity precheck can return before any backend runs; it has not
+been changed. A raw diagnostic mode and target-specific bypass remain proposals.
+See [the complete investigation](SCREENSHOT_INVESTIGATION.md) and
+[current capture behavior](SCREENSHOTS.md).
+
+Both v1.3.0 Windows CI runs passed MSVC build, CTest, installer regressions and
+packaging. This supersedes the older MSVC status below, but does not establish
+interactive Windows 11 GPU capture or success against the focus app.
+
 ## v1.1.1 capture protection — PENDING native verification
 
 | Area | Evidence | Open |
@@ -43,9 +57,9 @@ is still required before calling the port complete.
 | Overlay creation, show/hide, compact/expanded geometry | Smoke: creation, visibility, clamping, app expansion | VERIFIED (Wine); native styling/focus: 3, 5 |
 | Alt+X/G/F/D/M | SendInput through the actual low-level hook; state and geometry assertions | VERIFIED (Wine); external Alt menus and held chords: 4 |
 | Alt+A/S opacity bounds and hotkey dedupe | Implemented; CLI opacity changes exercised | UNVERIFIED (Windows): 4 |
-| Alt+P capture | DXGI primary + GDI fallback; padded rows/rotations unit-tested; real GDI pixels, black rejection, cancellation, daemon PNG/clipboard equality and clipboard contention VERIFIED (Wine) | Native DXGI, display exclusion/protection and focus-app compatibility PENDING; see SCREENSHOTS.md |
-| Alt+O temporary WGC experiment | Separate WGC-only backend, shortcut and output folder; cross-build and unavailable-backend behavior exercised | Native Windows 11 WGC and focus-app comparison PENDING; `capture_runtime_test --require-wgc` |
-| Alt+Shift+O WGC window / GPU recovery | Foreground-window WGC item dimensions, monitor-associated GPU selection, one device-loss retry, explicit diagnostics | Native window pixels, hybrid GPUs and injected device-loss validation PENDING; `capture_runtime_test --require-wgc-window` |
+| Alt+P capture | DXGI primary + GDI fallback; padded rows/rotations unit-tested; real GDI pixels, black rejection, cancellation, daemon PNG/clipboard equality and clipboard contention VERIFIED (Wine) | Focus-app acceptance unsuccessful by user report; actual backend/error unconfirmed. Controlled native DXGI/protection checks PENDING; see SCREENSHOT_INVESTIGATION.md |
+| Alt+O temporary WGC experiment | Separate WGC-only backend, shortcut and output folder; cross-build and unavailable-backend behavior exercised | No successful focus-app result; precheck can prevent WGC call. Controlled native frames PENDING; `capture_runtime_test --require-wgc` |
+| Alt+Shift+O WGC window / GPU recovery | Foreground-window WGC item dimensions, monitor-associated GPU selection, one device-loss retry, explicit diagnostics | No successful focus-app result; native window pixels, hybrid GPUs and device-loss validation PENDING; `capture_runtime_test --require-wgc-window` |
 | Alt+W start/cancel | External EDIT receives exact text; cancellation while guard is active stops typing | VERIFIED (Wine); application-specific input: 12–14 |
 | Mirror / Exclusive routing | Press, release, repeat, shield, target change and guard routing unit tests; mouse activation and hide-release in native receiver | UNIT TESTED + partial VERIFIED (Wine); WebView2: 8–10 |
 | Modifier snapshots, layout translation | Pure key table tests; captures modifier/scan/lock/repeat state at hook time | UNIT TESTED; native layouts, AltGr, IME: 8 |
@@ -70,7 +84,7 @@ is still required before calling the port complete.
 | Per-user installer | Inno 6.7.3 compile; isolated Wine install, running supervised upgrade, binary/version, Run/PATH, normal retention and interactive purge checks | VERIFIED (Wine); actual runtime download/sign-in/upgrade: 1, 2, 18 |
 | Runtime bootstrap failure | Checks launch, exit code and post-install detection; gives fallback instructions | UNVERIFIED (Windows): 1 |
 | Optional UIAccess | Both cross-build and embedded uiAccess manifest checked; retains UIAccess exe when supervised | Compiled; signing, secure installation and elevated targets UNVERIFIED (Windows): 15 |
-| MSVC build | Windows CI configured for native build, tests and installer staging | UNVERIFIED locally; run the Windows workflow |
+| MSVC build | v1.3.0 main/release Windows CI passed native build, CTest, installer regressions and packaging | VERIFIED (CI); interactive desktop/focus-app acceptance remains separate; links in SCREENSHOT_INVESTIGATION.md |
 | Stability | Full fixed-binary memory soak and smoke logs recorded in integration report | Wine has no usable handle counter; native WebView2/handle/GDI soak: 17 |
 
 ## Configuration keys Parity (`config.ini`)

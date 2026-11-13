@@ -1,0 +1,41 @@
+{
+  "tool": "https://github.com/aynakeya/v8asm",
+  "commit": "0d1e8a9d05618f459c96b1e1eddb2bf6b95bc8f5",
+  "source_sha256": "0cd680a356735566551cc2ab2baa27f8354b7532045a49e67b79e3a3ab42634e",
+  "snapshot_sha256": "1fa1cdd08423809344fe15fac2d9d1ec604cc3ea5af4b944d89a51b1e98c8665",
+  "metadata": {
+    "v8_version": "14.2.231.22",
+    "root_layout_version": "14.2.231.22",
+    "runtime_variant": "leaptiering",
+    "literal_flags": {
+      "define_keyed_dont_enum": 0,
+      "define_keyed_set_function_name": 1,
+      "object_literal_null_prototype": 16
+    },
+    "tagged_size": 4,
+    "address_kind": "synthetic_serializer_object",
+    "serialized_object_count": 16032,
+    "bytecode_array_count": 1175,
+    "header": {
+      "magic": 3235776104,
+      "version_hash": 2404442679,
+      "source_hash": 279281,
+      "flags_hash": 643503313,
+      "read_only_snapshot_checksum": 1377191331,
+      "payload_length": 705576,
+      "checksum": 0,
+      "header_size": 32,
+      "raw_payload": false
+    },
+    "snapshot": {
+      "v8_version": "14.2.231.22-electron.0",
+      "magic": 3235776104,
+      "checksum": 1377191331,
+      "static_roots": true
+    }
+  },
+  "decoded_arrays": 1175,
+  "decoded_instructions": 80514,
+  "validation_issues": [],
+  "scope": "Static structural checks only; no runtime execution or general decompiler correctness claim."
+}

@@ -1,8 +1,28 @@
 # Windows screenshot reliability
 
-The current investigation targets Windows 11 x64. See the
-[adversarial Windows 11 review](CAPTURE_REVIEW_WINDOWS11.md) for the blocking
-mechanisms, capture responses and limits of a hardware-level capture claim.
+The current investigation targets Windows 11 x64. **Deepak's custom focus/Pomodoro
+app still cannot be captured successfully according to the user's post-release
+retest. This issue is open.**
+
+Read the [investigation and handoff record](SCREENSHOT_INVESTIGATION.md) for the
+attempt history, failed acceptance, user constraints, researched alternatives,
+release evidence, REA setup and next steps. The
+[adversarial Windows 11 review](CAPTURE_REVIEW_WINDOWS11.md) describes possible
+blocking mechanisms; none has yet been confirmed for this particular app.
+
+## Known experimental limitation: pre-capture refusal
+
+In v1.3.0, `screen_capture::Capture` and `CaptureWindow` return early when
+`WindowProtectsCapture` reports nonzero foreground display affinity. This happens
+before the selected DXGI/GDI/WGC call. Consequently, unsuccessful shortcuts do
+not establish that every backend actually tried to read the protected app.
+The user's logs have not been supplied to determine whether this branch ran.
+
+Changing this precheck and retaining raw diagnostic frames were **proposed but
+not implemented**. Current failures still preserve old output files and discard
+black frames. Do not look for a new diagnostic CLI command or assume that a
+`latest_snap*.png` file was produced by the most recent failed attempt. Removing
+our early exit would allow measurement; it would not itself remove OS protection.
 
 ## Temporary Alt+O experiment
 
@@ -48,6 +68,8 @@ fails. A temporary colored display border is expected. The experiment is isolate
 in `wgc_capture.cpp`, `Backend::Wgc`, `snap::RunExperimental` and `Id::SnapWgc` for
 straightforward removal after the test.
 
+## Normal capture pipeline
+
 Alt+P, the camera button and `cronq snap` share the same capture pipeline.
 It captures the configured scope using DXGI Desktop Duplication first, creating a
 D3D11 device on the adapter that owns each display. Frames are read back with
@@ -75,8 +97,9 @@ or different input desktops produce a restriction error. There is no fallback af
 an explicit protection/access error. Administrator mode and UIAccess are not general
 solutions to capture restrictions. Supported Windows capture APIs do not guarantee
 access to protected surfaces or secure desktops. This implementation does not promise
-to capture through an application's intentional protection. The focus app reported
-by the user has not been reproduced or inspected.
+to capture through an application's intentional protection. The user reports
+continued failure with the focus app; it has not been independently reproduced
+or inspected by the agent, and there is no per-backend native trace.
 
 Logs in `%LOCALAPPDATA%\cronq\cronq.log` record backend, output geometry, operation
 and HRESULT on failure, and publication outcome. They do not record window titles,
@@ -117,8 +140,9 @@ The Alt+O build cross-compiles with WebView2 enabled. Under Wine, all 21 CTest c
 and existing pixel/daemon tests pass. Injected Alt+O dispatches WGC without fallback,
 Ctrl+Alt+O and locked Alt+O do not dispatch, an unavailable WGC backend reports failure
 without replacing either existing latest PNG, and normal captures still work afterward.
-Actual WGC frames, its border lifetime and the custom focus app remain unverified on
-native Windows 11. The test build is intended for that experiment.
+Controlled native WGC frames and its border lifetime remain unverified by the
+agent. The user's subsequent focus-app retest was unsuccessful; the missing
+per-backend logs and the precheck above prevent attribution to a particular API.
 
 v1.3.0 adds the window path and monitor-associated GPU/device-loss handling. The
 repeatable `scripts/capture-wine-test.sh` runs the CTest suite, pixel/clipboard tests,
@@ -140,6 +164,13 @@ tests also passed with AddressSanitizer/UndefinedBehaviorSanitizer (leak checkin
 disabled because the sandbox uses ptrace). Native DXGI and display-affinity checks
 were skipped under Wine and remain pending. JavaScript syntax validation passed.
 
+The v1.3.0 main and release workflows also passed on GitHub's native Windows
+runner: MSVC build, CTest, installer-script/purge regressions and installer
+packaging. Links and installer verification are in the
+[release checkpoint](SCREENSHOT_INVESTIGATION.md#current-release-and-delivery-checkpoint).
+These CI results do not validate interactive DXGI/WGC or the focus app on the
+user's Windows 11 desktop. No controlled target-specific capture has passed.
+
 The adversarial fixture additionally exercises actual blanking, actual exclusion
 against a known green backing window, and recovery after those protections are
 removed. These new native Windows 11 checks remain pending until run on that OS.
@@ -148,10 +179,10 @@ Native manual checks still required:
 
 | Scenario | Expected result |
 | --- | --- |
-| Focus app, windowed and fullscreen | Correct saved PNG and pasted image, or a restriction/blank error with diagnostics |
+| Focus app, windowed and fullscreen | OPEN: user reports failure. Record which API was reached and inspect a newly produced PNG/clipboard image. A restriction error is useful diagnosis, not successful target capture. |
 | Ordinary GPU-rendered fullscreen app | Correct image through DXGI; no UI freeze |
 | Mixed GPU adapters, negative monitor origins, portrait display | Every requested display present and correctly oriented |
-| HDR | Usable 8-bit SDR screenshot; advanced HDR tone mapping is not implemented |
+| HDR | Record actual image appearance; the implementation uses 8-bit SDR without custom HDR tone mapping, and HDR correctness is unverified |
 | UAC, lock screen or separate input desktop | Restriction error; no black file published |
 | Clipboard held briefly by another process | Capture saved, clipboard publication retried without blocking the message loop |
 | Clipboard unavailable for the retry interval | Saved image retained and clipboard failure reported |

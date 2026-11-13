@@ -1,5 +1,25 @@
 # START HERE
 
+## Current Windows continuation — 2026-11-13
+
+This folder records the earlier Windows porting phases. For current work, start
+with [the Windows README and documentation map](../windows/README.md),
+[the parity record](../windows/PARITY.md) and especially
+[the screenshot investigation](../windows/SCREENSHOT_INVESTIGATION.md).
+The phase statuses and environment assumptions below are historical; the owner
+now has Windows 11 in dual boot, native Windows CI has passed, and the owner has
+reported unsuccessful screenshot testing against Deepak's protected focus app.
+
+The screenshot issue remains open. v1.3.0 includes DXGI/GDI and two WGC
+experiments, but an unchanged foreground-affinity precheck can stop those
+experiments before a capture API runs. Timing and wrong-monitor selection were
+ruled out by the owner; a VM was rejected. REA MCP and Ghidra are connected on the
+operator workstation, but no target executable or analysis has been supplied.
+Use the linked investigation for implemented-versus-proposed status, evidence and
+next steps. Do not treat a completed phase or passing CI as a focus-app fix.
+
+## Historical phase instructions
+
 You are taking over a half-finished project: **a Windows version of an app called Cronq**.
 This folder is your instruction manual. Read the files **in the order below**, completely, before writing any code.
 Do not skim. Every file exists because a mistake is easy to make in that area.

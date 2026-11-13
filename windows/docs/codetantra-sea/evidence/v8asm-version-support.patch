@@ -1,0 +1,109 @@
+diff --git a/decompiler/instruction.py b/decompiler/instruction.py
+index 5a2582f..a21869f 100644
+--- a/decompiler/instruction.py
++++ b/decompiler/instruction.py
+@@ -65,6 +65,12 @@ class Instruction:
+                 self.prefix_size = 1
+                 self.mnemonic = self.mnemonic[: -len(suffix)]
+                 break
++        self.mnemonic = {
++            "LdaCurrentContextSlotNoCell": "LdaCurrentContextSlot",
++            "LdaContextSlotNoCell": "LdaContextSlot",
++            "StaCurrentContextSlotNoCell": "StaCurrentContextSlot",
++            "StaContextSlotNoCell": "StaContextSlot",
++        }.get(self.mnemonic, self.mnemonic)
+ 
+     @classmethod
+     def from_codeline(cls, line: CodeLine) -> "Instruction":
+diff --git a/decompiler/structured.py b/decompiler/structured.py
+index 0e30f2e..9fdc650 100644
+--- a/decompiler/structured.py
++++ b/decompiler/structured.py
+@@ -124,6 +124,14 @@ def _populate_bytecode(
+         ):
+             raise StructuredDisassemblyError("instruction.arguments must contain strings")
+         mnemonic = instruction.get("mnemonic")
++        # Analysis-only lowering: direct context-slot operations have the same
++        # pseudocode read/write form; raw instructions remain in input JSON.
++        mnemonic = {
++            "LdaCurrentContextSlotNoCell": "LdaCurrentContextSlot",
++            "LdaContextSlotNoCell": "LdaContextSlot",
++            "StaCurrentContextSlotNoCell": "StaCurrentContextSlot",
++            "StaContextSlotNoCell": "StaContextSlot",
++        }.get(mnemonic, mnemonic)
+         if not isinstance(mnemonic, str):
+             raise StructuredDisassemblyError("instruction.mnemonic must be a string")
+         jump_target = instruction.get("jump_target")
+diff --git a/disassembler/generate_profiles.py b/disassembler/generate_profiles.py
+index cde1e19..2e5226f 100644
+--- a/disassembler/generate_profiles.py
++++ b/disassembler/generate_profiles.py
+@@ -171,7 +171,10 @@ def parse_bytecodes(source: str) -> list[dict[str, object]]:
+         if "#define BYTECODE_LIST_WITH_UNIQUE_HANDLERS_IMPL(" in source
+         else "BYTECODE_LIST_WITH_UNIQUE_HANDLERS"
+     )
+-    calls = macro_calls(macro_body(source, unique_name))
++    body = macro_body(source, unique_name)
++    if "CALL_PROPERTY_BYTECODES(V)" in body:
++        body = body.replace("CALL_PROPERTY_BYTECODES(V)", macro_body(source, "CALL_PROPERTY_BYTECODES"))
++    calls = macro_calls(body)
+     calls.extend(macro_calls(macro_body(source, "SHORT_STAR_BYTECODE_LIST")))
+     calls.append(["Illegal", "ImplicitRegisterUse::kNone"])
+ 
+@@ -479,8 +482,8 @@ def parse_runtime_names(source: str, leaptiering: bool) -> list[str]:
+         definitions.append("#define V8_ENABLE_LEAPTIERING 1")
+     expansion = """
+ OFFLINE_RUNTIME_BEGIN
+-#define OFFLINE_F(name, nargs, ressize) OFFLINE_RUNTIME(name)
+-#define OFFLINE_I(name, nargs, ressize) OFFLINE_RUNTIME(name)
++#define OFFLINE_F(name, nargs, ressize, ...) OFFLINE_RUNTIME(name)
++#define OFFLINE_I(name, nargs, ressize, ...) OFFLINE_RUNTIME(name)
+ FOR_EACH_INTRINSIC(OFFLINE_F)
+ FOR_EACH_INLINE_INTRINSIC(OFFLINE_I)
+ OFFLINE_RUNTIME_END
+@@ -670,8 +673,12 @@ def parse_class_boilerplate_layout(source: str, descriptors: str, structs: str,
+             tagged_slots += 1
+     entry_body = descriptors.split("struct DescriptorEntry {", 1)[1].split("}", 1)[0]
+     entry_fields = re.findall(r"(\w+)\s*:", entry_body)
+-    accessor_body = structs.split("extern class AccessorPair extends Struct {", 1)[1].split("}", 1)[0]
+-    accessor_fields = re.findall(r"(\w+)\s*:", accessor_body)
++    if "extern class AccessorPair extends Struct {" in structs:
++        accessor_body = structs.split("extern class AccessorPair extends Struct {", 1)[1].split("}", 1)[0]
++        accessor_fields = re.findall(r"(\w+)\s*:", accessor_body)
++    else:
++        accessor_body = structs.split("class AccessorPair : public StructLayout {", 1)[1].split("} V8_OBJECT_END", 1)[0]
++        accessor_fields = re.findall(r"TaggedMember<[^>]+> (\w+)_;", accessor_body)
+     if count_offset is None or not slots:
+         raise ValueError("class boilerplate layout not found")
+     kind = re.search(r"KindField\s*=\s*base::BitField<PropertyKind,\s*(\d+),\s*(\d+)>", properties)
+@@ -738,6 +745,8 @@ def build_profile(repo: Path, version: str) -> dict[str, object]:
+     accessors_source = git_show(repo, version, "src/builtins/accessors.h")
+     roots_source = git_show(repo, version, "src/roots/roots.h")
+     static_roots_source = git_show_optional(repo, version, "src/roots/static-roots.h")
++    if static_roots_source and "static-roots-intl-wasm.h" in static_roots_source:
++        static_roots_source += git_show(repo, version, "src/roots/static-roots-intl-wasm.h")
+     globals_source = git_show(repo, version, "src/common/globals.h")
+     ast_source = git_show(repo, version, "src/ast/ast.h")
+     scope_info_source = git_show(repo, version, "src/objects/scope-info.tq")
+@@ -797,7 +806,7 @@ def build_profile(repo: Path, version: str) -> dict[str, object]:
+         "class_boilerplate_layout": parse_class_boilerplate_layout(
+             literal_objects_source,
+             git_show(repo, version, "src/objects/descriptor-array.tq"),
+-            git_show(repo, version, "src/objects/struct.tq"),
++            git_show(repo, version, "src/objects/struct.tq") + (git_show_optional(repo, version, "src/objects/struct.h") or ""),
+             git_show(repo, version, "src/objects/property-details.h"),
+         ),
+         "scope_info_layout": parse_scope_info_layout(
+diff --git a/disassembler/profiles/index.json b/disassembler/profiles/index.json
+index 6d9a5ff..5782407 100644
+--- a/disassembler/profiles/index.json
++++ b/disassembler/profiles/index.json
+@@ -39,6 +39,7 @@
+     "13.4.114.14",
+     "13.4.114.21",
+     "13.6.233.8",
+-    "13.6.233.10"
++    "13.6.233.10",
++    "14.2.231.22"
+   ]
+ }

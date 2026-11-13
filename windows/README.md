@@ -11,6 +11,34 @@ application-specific behavior can still require adjustments. See [release notes]
 
 [Download the latest Windows installer](https://github.com/savenXD/Linux-Handy-overlay/releases/latest/download/cronq-setup.exe).
 
+**Known screenshot issue (2026-11-13):** the user reports that v1.3.0's proposed
+capture solutions still do not capture Deepak's protected focus/Pomodoro app.
+The issue remains open. An affinity precheck can stop capture before a backend
+runs; changing that behavior has been proposed, not implemented. See the
+[investigation record](SCREENSHOT_INVESTIGATION.md) before continuing this work.
+
+## Windows documentation map
+
+Moving from the Linux investigation to a Windows machine? Read
+[WINDOWS_AGENT_HANDOFF.md](../WINDOWS_AGENT_HANDOFF.md) first. It identifies the
+current CodeTantra target, preserved evidence, remaining task and native test plan.
+
+| Document | Purpose |
+| --- | --- |
+| [This README](README.md) | Install, configure, operate and run general acceptance checks |
+| [Screenshot behavior and tests](SCREENSHOTS.md) | Current capture pipeline, shortcuts, files, diagnostics and native commands |
+| [Screenshot investigation](SCREENSHOT_INVESTIGATION.md) | Full continuation context: attempts, negative user results, confirmed code limitation, research, tooling and next work |
+| [CodeTantra SEA findings](docs/codetantra-sea/README.md) | Target-specific recovered implementation, Windows affinity log and evidence provenance |
+| [Windows 11 capture review](CAPTURE_REVIEW_WINDOWS11.md) | Possible protection mechanisms and capture limits, distinguished from confirmed target findings |
+| [Parity and verification](PARITY.md) | Evidence and outstanding acceptance by feature |
+| [UIAccess](UIACCESS.md) | Optional signed build for elevated-app interaction; not a general screenshot-protection bypass |
+| [v1.3.0 notes](v1.3.0.md) | Released behavior and post-release screenshot issue notice |
+| [Download frontend](../frontend/README.md) | Stable installer URL, release asset naming and download-gate checks |
+
+Earlier `v*.md` files and [phase handoff reports](../antigravity/00_START_HERE.md)
+are historical records. Use the current investigation and parity documents for
+today's screenshot status; do not infer acceptance from an older phase completion.
+
 ---
 
 ## System Requirements
@@ -18,6 +46,10 @@ application-specific behavior can still require adjustments. See [release notes]
 - **Operating System:** Windows 10 (version 2004 / build 19041 or later) or Windows 11 (64-bit x64).
 - **Runtime:** Microsoft Edge WebView2 Evergreen Runtime (pre-installed on Windows 11 and recent Windows 10; automatically detected and installed by the setup installer if missing).
 - **Privileges:** Standard user privileges (no Administrator rights required for normal installation and operation).
+
+The screenshot investigation and temporary capture experiments target **Windows
+11 x64 only**. The broader installer minimum above is retained for the existing
+port; it does not certify screenshot behavior on every Windows 10/11 build.
 
 ---
 
@@ -62,6 +94,8 @@ cronq --load <url>     # Load a webpage in the browser view
 cronq --app chatgpt    # Switch to ChatGPT view
 cronq --app ghost      # Switch to Ghost Typer view
 cronq snap             # Capture screenshot (excluding overlay) to clipboard and disk
+cronq snap-wgc         # Temporary Windows 11 WGC monitor experiment
+cronq snap-wgc-window  # Temporary Windows 11 WGC foreground-window experiment
 cronq kill             # Terminate running background overlay and supervisor
 cronq update           # Check GitHub for a newer version; verifies the download's SHA-256, then runs setup
 ```
@@ -72,7 +106,7 @@ cronq update           # Check GitHub for a newer version; verifies the download
 
 All global shortcuts use the **Alt + key** chord. The focused application does not lose focus, and hotkeys are swallowed cleanly without opening menu bars.
 
-While the overlay is **hidden**, only Alt+X, Alt+P, Alt+W, Alt+K and Alt+Shift+K belong to Cronq. The window-layout shortcuts
+While the overlay is **hidden**, Alt+X, Alt+P, Alt+O, Alt+Shift+O, Alt+W, Alt+K and Alt+Shift+K belong to Cronq. The window-layout shortcuts
 (Alt+G/A/S/F/D/M/C/T and Alt+Left/Right) then reach your applications normally, so for example Alt+Left stays "Back" in your browser.
 
 | Shortcut | Action | Configurable Key | Default |
@@ -107,6 +141,9 @@ The O key is reserved for this experiment even if a configured shortcut also use
 Alt+Shift+O selects the external foreground window when pressed and uses its actual WGC dimensions.
 Its CLI equivalent is `cronq snap-wgc-window`, with latest image `latest_snap_wgc_window.png`.
 WGC chooses the target display's GPU where available and rebuilds the capture session once after device loss.
+Both experimental modes still contain the foreground-affinity early exit. Their
+failure alone does not show that WGC returned black pixels. The proposed raw-frame
+diagnostic mode and researched in-process protection reset are not in this release.
 
 ### Kill switch (Alt+Shift+K)
 On **Enter**, Cronq quits and a detached native cleanup (a copy of `cronqw.exe` run from `%TEMP%` with `--purge`;
@@ -122,11 +159,12 @@ Lock state is not saved: restarting Cronq starts unlocked.
 
 ## Mouse Controls
 
-### Hidden from screen recorders (always on)
+### Capture exclusion (enabled by default)
 
-Cronq excludes its window from screen capture with `WDA_EXCLUDEFROMCAPTURE`. You see it normally, but
-full-screen recordings, screen sharing and screenshots do not contain it. It is on by default; there is no
-hotkey. To turn it off, set `hide_from_capture = false` under `[Privacy]` in `config.ini`.
+Cronq requests exclusion of its own window from compatible Windows screen-capture
+tools with `WDA_EXCLUDEFROMCAPTURE`. This is enabled by default, with no hotkey.
+It is not a guarantee against every recorder, direct rendering capture or external
+capture path. To turn it off, set `hide_from_capture = false` under `[Privacy]` in `config.ini`.
 Needs Windows 10 2004+. It does not hide your other windows or a physical camera.
 
 Windows can only exclude windows that Cronq itself owns. Menus, tooltips, prompts and dialogs that the
@@ -282,6 +320,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File windows/installer/uninstall.
 | `WebView2 unavailable` error in log | Microsoft Edge WebView2 runtime missing | Run the installer setup or download runtime from Microsoft: `https://go.microsoft.com/fwlink/p/?LinkId=2124703` |
 | Text not typed into target app | Target app is running as Administrator | Run target as normal user or follow `windows/UIACCESS.md` to enable UIAccess build |
 | Ghost mode clicks hitting overlay | Click-through disabled | Press **Alt+G** to enable transparent click-through mode |
+| Deepak's focus app cannot be captured | Exact mechanism unknown; our foreground-affinity precheck may also stop capture before an API runs | Issue open. Preserve the exact error and matching `cronq.log` entry; follow [the investigation record](SCREENSHOT_INVESTIGATION.md). No implemented bypass is available. |
+| Latest screenshot appears unchanged after an error | Failed capture preserves the last successful file and clipboard | Check timestamp and logs; `latest_snap.png`, `latest_snap_wgc.png` and `latest_snap_wgc_window.png` are separate success indexes |
 | Antivirus false positive warning | Unsigned executable heuristic | Releases are not code-signed. Check the download against `SHA256SUMS.txt` on the release page (`cronq update` does this automatically) |
 
 ---
@@ -322,7 +362,9 @@ See [the integration report](../antigravity/REPORT_INTEGRATION.md) for exact res
 
 ## Windows acceptance checklist
 
-Use Windows 10 22H2 and Windows 11 as a standard user. These steps cover paths Wine cannot establish.
+Use an interactive Windows desktop as a standard user. The current screenshot
+investigation requires Windows 11 x64; historical Windows 10 coverage of the
+broader port is separate. These steps cover paths Wine cannot establish.
 
 1. **Install and upgrade.** Run setup without elevation; verify the Start Menu shortcut and all four payloads
    (`cronq.exe`, `cronqw.exe`, `WebView2Loader.dll`, `ui/`). Upgrade while Cronq is running. Select/deselect
@@ -350,6 +392,10 @@ Use Windows 10 22H2 and Windows 11 as a standard user. These steps cover paths W
 11. **Screenshot.** Capture visible/hidden and solid/click-through overlays, primary/all screens, and rapid
     consecutive captures. The overlay is excluded and OS focus stays external. Paste into Paint and inspect
     both saved PNG and `latest_snap.png`. With default retention, 25 captures leave the newest 20 files.
+    On Windows 11 also test Alt+O and Alt+Shift+O and their separate output indexes.
+    Follow [SCREENSHOTS.md](SCREENSHOTS.md) for native GPU fixtures. For Deepak's app,
+    follow the [open investigation](SCREENSHOT_INVESTIGATION.md#next-work-in-order);
+    neither an explanatory restriction error nor an old PNG counts as a successful capture.
 12. **Writer settings.** Toggle Human-like, Extra safe and all speeds, restart, and verify settings persist.
     Existing INI comments and unrelated sections survive. Type in the editor then immediately click Start;
     the newest text is used. Verify countdown cancel and Alt+W cancel during typing.
