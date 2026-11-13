@@ -7,6 +7,7 @@
 #include "config.h"
 #include "geometry.h"
 #include "ghost.h"
+#include "god_copy.h"
 #include "hotkey.h"
 #include "input.h"
 #include "raise.h"
@@ -1174,6 +1175,7 @@ void Back() {
         SwitchApp("home");
 }
 void UniversalReset() {
+    god_copy::Cleanup();
     ghost::Cancel();
     input::ReleaseGrab();
     // DECISION: owner confirmed Linux overlay_universal_reset behavior (Home + Mirror/Solid).

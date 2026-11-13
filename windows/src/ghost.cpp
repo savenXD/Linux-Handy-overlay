@@ -1,4 +1,5 @@
 #include "ghost.h"
+#include "god_copy.h"
 
 #include <shlwapi.h>
 #include <windows.h>
@@ -569,6 +570,10 @@ void OnSettleTick() {
 }
 
 void Run() {
+    if (god_copy::IsBusy()) {
+        overlay::ShowToast("Wait for god-copy to finish before starting Ghost Writer");
+        return;
+    }
     if (g_countdownActive) {
         KillTimer(overlay::Hwnd(), kGhostCountdownTimerId);
         g_countdownActive = false;

@@ -3,6 +3,7 @@
 #include <cctype>
 #include "config.h"
 #include "ghost.h"
+#include "god_copy.h"
 #include "input.h"
 #include "input_logic.h"
 #include "killswitch.h"
@@ -69,6 +70,8 @@ int64_t DedupeUs(Id id) {
             return 200000;
         case Id::DefaultSize:
             return 200000;
+        case Id::GodCopy:
+        case Id::GodPaste:
         case Id::Snap:
         case Id::SnapWgc:
         case Id::SnapWgcWindow:
@@ -111,6 +114,10 @@ const char* Describe(Id id) {
             return "Alt+Mode -> Cycling key mode";
         case Id::GhostWrite:
             return "Alt+W -> Ghost Write";
+        case Id::GodCopy:
+            return "Ctrl+Alt+C -> Read selected text";
+        case Id::GodPaste:
+            return "Ctrl+Alt+V -> Send retained text";
         case Id::Camouflage:
             return "Alt+C -> Toggle camouflage";
         case Id::Tone:
@@ -234,12 +241,14 @@ LRESULT CALLBACK LowLevelKeyboardProc(int code, WPARAM wp, LPARAM lp) {
     if (down && !wasDown && vk == VK_CAPITAL) InterlockedXor(&g_capsLock, 1);
     if (down && !wasDown && vk == VK_NUMLOCK) InterlockedXor(&g_numLock, 1);
     const unsigned mods = Modifiers();
-    Id id = vk == 'O' ? (mods == 9 ? Id::SnapWgcWindow : Id::SnapWgc) : vk == 'C' ? Id::Camouflage : vk == 'T' ? Id::Tone :
+    const bool godChord = mods == 3 && !g_physicalDown[VK_RMENU]; // AltGr must remain text input.
+    Id id = godChord && vk == 'C' ? Id::GodCopy : godChord && vk == 'V' ? Id::GodPaste : vk == 'O' ? (mods == 9 ? Id::SnapWgcWindow : Id::SnapWgc) : vk == 'C' ? Id::Camouflage : vk == 'T' ? Id::Tone :
             vk == VK_LEFT ? Id::DockLeft : vk == VK_RIGHT ? Id::DockRight : Match(vk);
     input_logic::Context context;
     if (IsLayoutHotkey(id) && !InterlockedCompareExchange(&g_overlayVisible, 0, 0)) id = Id::None;
     context.hotkey = id != Id::None && (mods == 1 || ((kb->flags & LLKHF_ALTDOWN) && !(mods & 14)));
     if (id == Id::SnapWgcWindow) context.hotkey = mods == 9;  // Alt+Shift only; never Ctrl/Win
+    if (id == Id::GodCopy || id == Id::GodPaste) context.hotkey = godChord;
     const bool locked = InterlockedCompareExchange(&g_locked, 0, 0) != 0;
     if (locked) {
         context.hotkey = false;  // locked: every normal hotkey is off
@@ -299,8 +308,9 @@ LRESULT CALLBACK LowLevelKeyboardProc(int code, WPARAM wp, LPARAM lp) {
                     (static_cast<LPARAM>(kb->scanCode & 255) << 16) |
                     ((kb->flags & LLKHF_EXTENDED) ? (1 << 24) : 0) | (route.repeat ? (1 << 25) : 0);
     if (up && (vk == VK_MENU || vk == VK_LMENU || vk == VK_RMENU)) g_suppressorSent = false;
-    if (route.hotkey && !((id==Id::Camouflage || id==Id::Tone || id==Id::DockLeft || id==Id::DockRight) && wasDown)) {
-        PostMessageW(g_target, WM_CRONQ_HOTKEY, static_cast<WPARAM>(id), 0);
+    if (route.hotkey && !((id==Id::Camouflage || id==Id::Tone || id==Id::DockLeft || id==Id::DockRight || id==Id::GodCopy || id==Id::GodPaste) && wasDown)) {
+        PostMessageW(g_target, WM_CRONQ_HOTKEY, static_cast<WPARAM>(id),
+                     (id == Id::GodCopy || id == Id::GodPaste) ? reinterpret_cast<LPARAM>(GetForegroundWindow()) : 0);
         if (!g_suppressorSent) {
             g_suppressorSent = true;
             PostMessageW(g_target, WM_CRONQ_ALTFIX, 0, 0);
@@ -447,7 +457,7 @@ void ReloadKeys() {
 
     Log("HOTKEY",
         "Hotkeys: Alt+%c toggle, Alt+%c ghost, Alt+A/S opacity, Alt+F fullscreen, Alt+D default size, "
-        "Alt+%c snap, Alt+O WGC monitor, Alt+Shift+O WGC window, Alt+%c mode, Alt+%c ghost writer.",
+        "Alt+%c snap, Alt+O WGC monitor, Alt+Shift+O WGC window, Alt+%c mode, Alt+%c ghost writer; Ctrl+Left Alt+C/V selected-text copy/paste.",
         (char)toupper(cfg.toggleKey), (char)toupper(cfg.ghostKey), (char)toupper(cfg.snapKey),
         (char)toupper(cfg.modeKey), (char)toupper(cfg.ghostWriterKey));
 }
@@ -519,10 +529,14 @@ void InjectAltSuppressor() {
     SendInput(2, in, sizeof(INPUT));
 }
 
-void Dispatch(Id id) {
+void Dispatch(Id id, HWND source) {
+    if ((id == Id::GodCopy || id == Id::GodPaste) && (!source || GetForegroundWindow() != source)) {
+        overlay::ShowToast("God-copy: focus changed before shortcut was handled");
+        return;
+    }
     if (id <= Id::None || id >= Id::Count) return;
     // A normal shortcut may already be queued when the hook enters the locked state.
-    if (IsLocked() && id >= Id::Toggle && id <= Id::DockRight) return;
+    if (IsLocked() && id >= Id::Toggle && id <= Id::GodPaste) return;
     if (IsLayoutHotkey(id) && !overlay::IsVisible()) return;  // queued just before a hide
     int64_t now = NowUs();
     if (now - g_lastTriggerUs[(int)id] < DedupeUs(id)) {
@@ -579,7 +593,14 @@ void Dispatch(Id id) {
         case Id::DockRight:
             overlay::DockBottom(id==Id::DockRight);
             break;
+        case Id::GodCopy:
+            god_copy::Copy();
+            break;
+        case Id::GodPaste:
+            god_copy::Paste();
+            break;
         case Id::Lock:
+            god_copy::Cleanup();
             ghost::Cancel();
             input::ReleaseGrab();
             overlay::Hide();

@@ -102,11 +102,13 @@ cronq update           # Check GitHub for a newer version; verifies the download
 
 ---
 
+See [GOD_COPY.md](GOD_COPY.md) for the experimental selection reader, retained paste, limitations, and native Windows acceptance checklist. CodeTantra support remains unverified.
+
 ## Global Keyboard Shortcuts
 
-All global shortcuts use the **Alt + key** chord. The focused application does not lose focus, and hotkeys are swallowed cleanly without opening menu bars.
+Most global shortcuts use **Alt + key**; experimental god-copy uses **Ctrl + Left Alt + C/V**. The focused application does not lose focus, and hotkeys are swallowed cleanly without opening menu bars.
 
-While the overlay is **hidden**, Alt+X, Alt+P, Alt+O, Alt+Shift+O, Alt+W, Alt+K and Alt+Shift+K belong to Cronq. The window-layout shortcuts
+While the overlay is **hidden**, Ctrl+Left Alt+C/V, Alt+X, Alt+P, Alt+O, Alt+Shift+O, Alt+W, Alt+K and Alt+Shift+K belong to Cronq. The window-layout shortcuts
 (Alt+G/A/S/F/D/M/C/T and Alt+Left/Right) then reach your applications normally, so for example Alt+Left stays "Back" in your browser.
 
 | Shortcut | Action | Configurable Key | Default |
@@ -121,6 +123,8 @@ While the overlay is **hidden**, Alt+X, Alt+P, Alt+O, Alt+Shift+O, Alt+W, Alt+K 
 | **Alt+O** | **Temporary Windows 11 experiment:** WGC-only screenshot; Windows may display a capture border. Clipboard and `%LOCALAPPDATA%\cronq\snaps-wgc` | *fixed, temporary* | `o` |
 | **Alt+Shift+O** | **Temporary Windows 11 experiment:** direct foreground-window WGC capture; clipboard and `%LOCALAPPDATA%\cronq\snaps-wgc-window` | *fixed, temporary* | `Shift+o` |
 | **Alt+M** | Cycle typing mode: Mirror ⇄ Exclusive | `mode_key` | `m` |
+| **Ctrl+Left Alt+C** | God-copy: independently read selected text, retain it, and attempt clipboard publication | *fixed, experimental* | `Ctrl+Alt+c` |
+| **Ctrl+Left Alt+V** | God-paste: send retained text without Ctrl+V; target acceptance must be checked | *fixed, experimental* | `Ctrl+Alt+v` |
 | **Alt+W** | Ghost Writer start / cancel typing | `ghost_writer_key` | `w` |
 | **Alt+C** | Toggle minimal camouflage; press again to restore the previous Light/Dark mode | *fixed* | `c` |
 | **Alt+T** | Switch Light/Dark (black/white text), preserving camouflage on/off | *fixed* | `t` |

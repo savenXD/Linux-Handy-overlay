@@ -149,7 +149,7 @@ LRESULT OnAppMessage(UINT msg, WPARAM wParam, LPARAM lParam) {
             return 0;
         }
         case WM_CRONQ_HOTKEY:
-            hotkey::Dispatch((hotkey::Id)wParam);
+            hotkey::Dispatch((hotkey::Id)wParam, reinterpret_cast<HWND>(lParam));
             return 0;
         case WM_CRONQ_ALTFIX:
             hotkey::InjectAltSuppressor();

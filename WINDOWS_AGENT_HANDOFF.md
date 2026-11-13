@@ -196,3 +196,7 @@ Start the Windows continuation with this message:
 > I am on Windows 11; CodeTantra is installed and currently closed. Continue the
 > unresolved screenshot task, verify this host's tools first, and prepare a
 > bounded native test. I will perform the CodeTantra login myself.
+
+## Experimental god-copy continuation
+
+A subsequent local implementation adds Ctrl+Left Alt+C (selection reading) and Ctrl+Left Alt+V (retained Unicode input). Read [windows/GOD_COPY.md](windows/GOD_COPY.md) before testing. It uses a bounded selection helper, standard EDIT and UI Automation readers, and a volatile internal buffer. Universal copying/pasting and CodeTantra compatibility are still unproven; the prior screenshot issue remains open. The implementation is packaged for v1.4.0; consult its GitHub release and Actions run for publication/build status.

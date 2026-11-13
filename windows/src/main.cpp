@@ -5,6 +5,7 @@
 #include "browser.h"
 #include "focus_guard.h"
 #include "ghost.h"
+#include "god_copy.h"
 #include <objbase.h>
 #include "common.h"
 #include "config.h"
@@ -174,6 +175,7 @@ int RunDaemon(bool forceVisible) {
     if (!hotkey::Init(overlay::Hwnd())) {
         LogErr("MAIN", "Failed to initialize global hotkey system.");
         snap::Cleanup();
+        god_copy::Cleanup();
         ghost::Cleanup();
         input::Cleanup();
         raise::Cleanup();
@@ -200,6 +202,7 @@ int RunDaemon(bool forceVisible) {
 
     Log("MAIN", "Shutdown: performing clean teardown...");
     theme::Cleanup();
+    god_copy::Cleanup();
     ghost::Cleanup();
     snap::Cleanup();
     input::Cleanup();
@@ -484,6 +487,12 @@ int RunCli(const std::vector<std::string>& args) {
 
 int main() {
     std::vector<std::string> args = GetArgs();
+    if (args.size() == 2 && args[0] == "--god-copy-worker") {
+        char* end = nullptr;
+        const auto handle = strtoull(args[1].c_str(), &end, 10);
+        if (!handle || !end || *end) return 2;
+        return god_copy::Worker(static_cast<uintptr_t>(handle));
+    }
 
 #ifdef CRONQ_CONSOLE
     SetConsoleOutputCP(CP_UTF8);
