@@ -43,7 +43,9 @@ is still required before calling the port complete.
 | Overlay creation, show/hide, compact/expanded geometry | Smoke: creation, visibility, clamping, app expansion | VERIFIED (Wine); native styling/focus: 3, 5 |
 | Alt+X/G/F/D/M | SendInput through the actual low-level hook; state and geometry assertions | VERIFIED (Wine); external Alt menus and held chords: 4 |
 | Alt+A/S opacity bounds and hotkey dedupe | Implemented; CLI opacity changes exercised | UNVERIFIED (Windows): 4 |
-| Alt+P capture | CLI/native capture produces valid PNG; WIC pixel round-trip passes | PNG path VERIFIED (Wine); display exclusion/clipboard: 11 |
+| Alt+P capture | DXGI primary + GDI fallback; padded rows/rotations unit-tested; real GDI pixels, black rejection, cancellation, daemon PNG/clipboard equality and clipboard contention VERIFIED (Wine) | Native DXGI, display exclusion/protection and focus-app compatibility PENDING; see SCREENSHOTS.md |
+| Alt+O temporary WGC experiment | Separate WGC-only backend, shortcut and output folder; cross-build and unavailable-backend behavior exercised | Native Windows 11 WGC and focus-app comparison PENDING; `capture_runtime_test --require-wgc` |
+| Alt+Shift+O WGC window / GPU recovery | Foreground-window WGC item dimensions, monitor-associated GPU selection, one device-loss retry, explicit diagnostics | Native window pixels, hybrid GPUs and injected device-loss validation PENDING; `capture_runtime_test --require-wgc-window` |
 | Alt+W start/cancel | External EDIT receives exact text; cancellation while guard is active stops typing | VERIFIED (Wine); application-specific input: 12–14 |
 | Mirror / Exclusive routing | Press, release, repeat, shield, target change and guard routing unit tests; mouse activation and hide-release in native receiver | UNIT TESTED + partial VERIFIED (Wine); WebView2: 8–10 |
 | Modifier snapshots, layout translation | Pure key table tests; captures modifier/scan/lock/repeat state at hook time | UNIT TESTED; native layouts, AltGr, IME: 8 |
@@ -111,7 +113,8 @@ Verified by automated parity test: `windows/tests/parity_config_test.cpp`.
 The writer uses `Typing cancelled`, `Stopped: focus changed`, `Stopped: unsupported character`,
 `Nothing to type`, `No focused app`, and `Target runs as administrator` as appropriate. Completion is
 `Typed N chars in <app>`. Formatting helpers are unit tested; final rendering and visibility belong to
-Windows steps 3 and 12–14. Snap uses the camera/snapping/checkmark state, not a claimed “saved” toast.
+Windows steps 3 and 12–14. Snap uses camera/snapping/checkmark/failure states and reports actual
+capture, save and clipboard publication outcomes separately.
 
 ## Automated results
 

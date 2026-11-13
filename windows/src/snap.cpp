@@ -1,21 +1,20 @@
 #include "snap.h"
 
-#include <shlobj.h>
-#include <wincodec.h>
-#include <windows.h>
 #include <algorithm>
-#include <chrono>
-#include <ctime>
+#include <atomic>
+#include <exception>
 #include <fstream>
 #include <memory>
+#include <new>
 #include <vector>
 
 #include "com_ptr.h"
 #include "config.h"
-#include "overlay.h"
-#include "snap_logic.h"
 #include "image_codec.h"
 #include "image_logic.h"
+#include "overlay.h"
+#include "screen_capture.h"
+#include "snap_logic.h"
 #include "ui_bridge.h"
 
 namespace cronq {
@@ -27,22 +26,35 @@ bool g_isSnapping = false;
 bool g_wasVisibleDuringSnap = false;
 bool g_usedAffinity = false;
 HANDLE g_worker = nullptr;
+std::atomic_bool g_cancelled{false};
+screen_capture::Backend g_backend = screen_capture::Backend::Automatic;
+HWND g_windowTarget = nullptr;
 
-// Encoding a multi-monitor capture to PNG and writing it can take a second; it runs on a worker
-// thread so the overlay never freezes. The UI thread then publishes the result to the clipboard.
+// Capture, GPU readback, encoding and disk IO all run on the worker.
+// Only overlay state and clipboard publication belong to the UI thread.
 struct SnapJob {
     int width = 0, height = 0;
     std::vector<uint8_t> bgra, png;
-    bool save = false, encoded = false;
+    bool save = false, encoded = false, saved = false, latestUpdated = false;
+    RECT bounds{};
+    HWND foreground = nullptr;
+    screen_capture::Status status = screen_capture::Status::Unavailable;
     int keepCount = 20;
     HWND notify = nullptr;
+    screen_capture::Backend backend = screen_capture::Backend::Automatic;
 };
 
 UINT g_pngClipboardFormat = 0;
+std::unique_ptr<SnapJob> g_pendingClipboard;
+std::unique_ptr<SnapJob> g_workerJob;
+unsigned g_clipboardAttempts = 0;
 
-// Snaps live in %LOCALAPPDATA%\cronq\snaps: unlike Pictures, it is never synced to OneDrive.
-std::wstring SnapDir() {
-    std::wstring dir = DataDir() + L"\\snaps";
+// Snaps live in %LOCALAPPDATA%\cronq\snaps: unlike Pictures, it is never synced
+// to OneDrive.
+std::wstring SnapDir(screen_capture::Backend backend) {
+    std::wstring dir = DataDir() + (backend == screen_capture::Backend::WgcWindow ? L"\\snaps-wgc-window"
+                                    : backend == screen_capture::Backend::Wgc     ? L"\\snaps-wgc"
+                                                                                  : L"\\snaps");
     CreateDirectoryW(dir.c_str(), nullptr);
     return dir;
 }
@@ -63,118 +75,234 @@ std::vector<std::string> ListSnapPngFiles(const std::wstring& dir) {
     return files;
 }
 
-void CopyToClipboard(int width, int height, const uint8_t* bgra, const std::vector<uint8_t>& pngData) {
-    HWND target = overlay::Hwnd();
-    if (!OpenClipboard(target)) {
-        LogErr("SNAP", "OpenClipboard failed (%lu); screenshot remains saved on disk", GetLastError());
-        return;
-    }
-    EmptyClipboard();
-
-    // 1. CF_DIB (Bottom-up DIB)
-    size_t dibPixelsSize = static_cast<size_t>(width) * height * 4;
-    size_t totalDibSize = sizeof(BITMAPINFOHEADER) + dibPixelsSize;
-    HGLOBAL hDib = GlobalAlloc(GMEM_MOVEABLE, totalDibSize);
-    if (hDib) {
-        uint8_t* pDib = reinterpret_cast<uint8_t*>(GlobalLock(hDib));
-        if (pDib) {
-            BITMAPINFOHEADER* bih = reinterpret_cast<BITMAPINFOHEADER*>(pDib);
-            ZeroMemory(bih, sizeof(BITMAPINFOHEADER));
-            bih->biSize = sizeof(BITMAPINFOHEADER);
-            bih->biWidth = width;
-            bih->biHeight = height;  // positive = bottom-up
-            bih->biPlanes = 1;
-            bih->biBitCount = 32;
-            bih->biCompression = BI_RGB;
-            bih->biSizeImage = static_cast<DWORD>(dibPixelsSize);
-
-            uint8_t* dst = pDib + sizeof(BITMAPINFOHEADER);
-            // Flip top-down BGRA to bottom-up
-            size_t stride = width * 4;
-            for (int y = 0; y < height; ++y) {
-                const uint8_t* srcRow = bgra + (height - 1 - y) * stride;
-                uint8_t* dstRow = dst + y * stride;
-                memcpy(dstRow, srcRow, stride);
-            }
-            GlobalUnlock(hDib);
-            if (!SetClipboardData(CF_DIB, hDib)) GlobalFree(hDib);
+enum class ClipboardResult { Published, Busy, Failed };
+ClipboardResult CopyToClipboard(int width, int height, const uint8_t* bgra,
+                                const std::vector<uint8_t>& pngData) {
+    if (!OpenClipboard(overlay::Hwnd())) return ClipboardResult::Busy;
+    // Prepare both formats before clearing the previous clipboard. Allocation
+    // failure must not destroy a user's existing clipboard or result in an empty
+    // clipboard marked as successful.
+    size_t bytes = size_t(width) * height * 4;
+    HGLOBAL dib = GlobalAlloc(GMEM_MOVEABLE, sizeof(BITMAPINFOHEADER) + bytes);
+    if (dib) {
+        auto* data = static_cast<uint8_t*>(GlobalLock(dib));
+        if (data) {
+            auto* header = reinterpret_cast<BITMAPINFOHEADER*>(data);
+            *header = {};
+            header->biSize = sizeof(BITMAPINFOHEADER);
+            header->biWidth = width;
+            header->biHeight = height;
+            header->biPlanes = 1;
+            header->biBitCount = 32;
+            header->biCompression = BI_RGB;
+            header->biSizeImage = static_cast<DWORD>(bytes);
+            for (int y = 0; y < height; ++y)
+                memcpy(data + sizeof(BITMAPINFOHEADER) + size_t(y) * width * 4,
+                       bgra + size_t(height - 1 - y) * width * 4, size_t(width) * 4);
+            GlobalUnlock(dib);
         } else {
-            GlobalFree(hDib);
+            GlobalFree(dib);
+            dib = nullptr;
         }
     }
-
-    // 2. Registered "PNG" format
-    if (!pngData.empty() && g_pngClipboardFormat != 0) {
-        HGLOBAL hPng = GlobalAlloc(GMEM_MOVEABLE, pngData.size());
-        if (hPng) {
-            void* pPng = GlobalLock(hPng);
-            if (pPng) {
-                memcpy(pPng, pngData.data(), pngData.size());
-                GlobalUnlock(hPng);
-                if (!SetClipboardData(g_pngClipboardFormat, hPng)) GlobalFree(hPng);
+    HGLOBAL png = nullptr;
+    if (g_pngClipboardFormat && !pngData.empty()) {
+        png = GlobalAlloc(GMEM_MOVEABLE, pngData.size());
+        if (png) {
+            void* data = GlobalLock(png);
+            if (data) {
+                memcpy(data, pngData.data(), pngData.size());
+                GlobalUnlock(png);
             } else {
-                GlobalFree(hPng);
+                GlobalFree(png);
+                png = nullptr;
             }
         }
     }
-
+    bool published = false;
+    if ((dib || png) && EmptyClipboard()) {
+        if (dib && SetClipboardData(CF_DIB, dib)) {
+            published = true;
+            dib = nullptr;
+        }
+        if (png && SetClipboardData(g_pngClipboardFormat, png)) {
+            published = true;
+            png = nullptr;
+        }
+    }
+    if (dib) GlobalFree(dib);
+    if (png) GlobalFree(png);
     CloseClipboard();
+    return published ? ClipboardResult::Published : ClipboardResult::Failed;
 }
 
-DWORD WINAPI EncodeWorker(LPVOID param) {
+void RestoreOverlay() {
+    if (g_usedAffinity) {
+        if (!SetWindowDisplayAffinity(overlay::Hwnd(), overlay::CaptureAffinity()))
+            LogErr("SNAP", "Cannot restore capture affinity (%lu)", GetLastError());
+    } else if (g_wasVisibleDuringSnap && overlay::IsVisible()) {
+        SetWindowPos(overlay::Hwnd(), HWND_TOPMOST, 0, 0, 0, 0,
+                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+    }
+    g_usedAffinity = false;
+    g_wasVisibleDuringSnap = false;
+}
+
+void Finish(const std::string& message, bool success) {
+    Log(success ? "SNAP" : "SNAP-ERROR", "%s", message.c_str());
+    overlay::ShowToast(message);
+    ui::PostToUi(success ? "{\"type\":\"snap-state\",\"state\":\"done\"}"
+                         : "{\"type\":\"snap-state\",\"state\":\"failed\"}");
+    SetTimer(overlay::Hwnd(), kSnapRevertTimerId, 2500, nullptr);
+    g_isSnapping = false;
+}
+
+void FinishJob(const SnapJob& job, const std::string& message, bool success) {
+    Finish((job.backend == screen_capture::Backend::WgcWindow ? "WGC window test: "
+            : job.backend == screen_capture::Backend::Wgc     ? "WGC test: "
+                                                              : "") +
+               message,
+           success);
+}
+
+DWORD WINAPI CaptureWorker(LPVOID param) {
     auto* job = static_cast<SnapJob*>(param);
-    const bool threaded = job->notify != nullptr;
-    HRESULT com = threaded ? CoInitializeEx(nullptr, COINIT_MULTITHREADED) : S_FALSE;
-    job->encoded = image_codec::EncodePng(job->width, job->height, job->bgra.data(), &job->png);
-    if (job->save && job->encoded) {
-        std::wstring dir = SnapDir();
-        SYSTEMTIME st;
-        GetLocalTime(&st);
-        char stamp[64];
-        snprintf(stamp, sizeof(stamp), "%04d%02d%02d-%02d%02d%02d", st.wYear, st.wMonth, st.wDay, st.wHour,
-                 st.wMinute, st.wSecond);
-        std::wstring filePath = dir + L"\\" + Widen(snap_logic::PickSnapName(ListSnapPngFiles(dir), stamp));
-        std::ofstream f(filePath.c_str(), std::ios::binary);
-        if (f.is_open()) {
-            f.write(reinterpret_cast<const char*>(job->png.data()), static_cast<std::streamsize>(job->png.size()));
-            f.close();
-            if (!f) {
-                LogErr("SNAP", "Screenshot write failed");
-                DeleteFileW(filePath.c_str());
-            } else {
-                Log("SNAP", "Saved screenshot");
-                std::wstring latestPath = DataDir() + L"\\latest_snap.png";
-                if (!CopyFileW(filePath.c_str(), latestPath.c_str(), FALSE))
-                    LogErr("SNAP", "Cannot update latest screenshot (%lu)", GetLastError());
-            }
+    HRESULT com = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    try {
+        Log("SNAP", "%s capture requested",
+            job->backend == screen_capture::Backend::WgcWindow ? "WGC window experimental"
+            : job->backend == screen_capture::Backend::Wgc     ? "WGC experimental"
+                                                               : "Automatic");
+        auto capture = job->backend == screen_capture::Backend::WgcWindow
+                           ? screen_capture::CaptureWindow(job->foreground, g_cancelled)
+                           : screen_capture::Capture(job->bounds, job->foreground, g_cancelled, job->backend);
+        job->status = capture.status;
+        job->bgra = std::move(capture.bgra);
+        if (job->status == screen_capture::Status::Ok) {
+            job->width = capture.width;
+            job->height = capture.height;
         }
-        for (const auto& oldName : snap_logic::FilesToPrune(ListSnapPngFiles(dir), job->keepCount))
-            DeleteFileW((dir + L"\\" + Widen(oldName)).c_str());
+        if (job->status == screen_capture::Status::Ok && !g_cancelled)
+            job->encoded = image_codec::EncodePng(job->width, job->height, job->bgra.data(), &job->png);
+        if (job->save && job->encoded && !g_cancelled) {
+            std::wstring dir = SnapDir(job->backend);
+            SYSTEMTIME st;
+            GetLocalTime(&st);
+            char stamp[64];
+            snprintf(stamp, sizeof(stamp), "%04d%02d%02d-%02d%02d%02d", st.wYear, st.wMonth, st.wDay,
+                     st.wHour, st.wMinute, st.wSecond);
+            std::wstring filePath =
+                dir + L"\\" + Widen(snap_logic::PickSnapName(ListSnapPngFiles(dir), stamp));
+            std::wstring tempPath = filePath + L".tmp";
+            std::ofstream f(tempPath.c_str(), std::ios::binary);
+            if (f.is_open()) {
+                f.write(reinterpret_cast<const char*>(job->png.data()),
+                        static_cast<std::streamsize>(job->png.size()));
+                f.close();
+                if (!f) {
+                    LogErr("SNAP", "Screenshot write failed");
+                    DeleteFileW(tempPath.c_str());
+                } else if (MoveFileExW(tempPath.c_str(), filePath.c_str(), MOVEFILE_WRITE_THROUGH)) {
+                    job->saved = true;
+                    Log("SNAP", "Saved screenshot");
+                    std::wstring latestPath =
+                        DataDir() + (job->backend == screen_capture::Backend::WgcWindow
+                                         ? L"\\latest_snap_wgc_window.png"
+                                     : job->backend == screen_capture::Backend::Wgc ? L"\\latest_snap_wgc.png"
+                                                                                    : L"\\latest_snap.png");
+                    std::wstring latestTemp = latestPath + L".tmp";
+                    job->latestUpdated = CopyFileW(filePath.c_str(), latestTemp.c_str(), FALSE) &&
+                                         MoveFileExW(latestTemp.c_str(), latestPath.c_str(),
+                                                     MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH);
+                    if (!job->latestUpdated) {
+                        LogErr("SNAP", "Cannot update latest screenshot (%lu)", GetLastError());
+                        DeleteFileW(latestTemp.c_str());
+                    }
+                } else {
+                    LogErr("SNAP", "Cannot publish screenshot file (%lu)", GetLastError());
+                    DeleteFileW(tempPath.c_str());
+                }
+            } else
+                LogErr("SNAP", "Cannot open screenshot file");
+            if (job->saved)
+                for (const auto& oldName : snap_logic::FilesToPrune(ListSnapPngFiles(dir), job->keepCount))
+                    DeleteFileW((dir + L"\\" + Widen(oldName)).c_str());
+        }
+    } catch (const std::exception&) {
+        if (!job->encoded) job->status = screen_capture::Status::Unavailable;
+        LogErr("SNAP", "Capture worker failed (allocation or IO error)");
     }
-    if (threaded) {
-        if (SUCCEEDED(com)) CoUninitialize();
-        if (!PostMessageW(job->notify, WM_CRONQ_SNAP_DONE, 0, reinterpret_cast<LPARAM>(job))) delete job;
-    }
+    if (g_cancelled) job->status = screen_capture::Status::Cancelled;
+    if (SUCCEEDED(com)) CoUninitialize();
+    if (!PostMessageW(job->notify, WM_CRONQ_SNAP_DONE, 0, reinterpret_cast<LPARAM>(job)))
+        LogErr("SNAP", "Completion notification failed; worker poll will finish publication");
     return 0;
 }
 
 }  // namespace
 
-// UI thread: the worker finished; publish to the clipboard and update the camera button.
+// UI thread: restore the overlay, then publish a valid result with bounded
+// clipboard retries.
 void OnEncoded(void* param) {
-    std::unique_ptr<SnapJob> job(static_cast<SnapJob*>(param));
+    if (param != g_workerJob.get() || !g_workerJob) return;
     if (g_worker) {
-        WaitForSingleObject(g_worker, INFINITE);  // it already posted: about to return
+        WaitForSingleObject(g_worker, INFINITE);
         CloseHandle(g_worker);
         g_worker = nullptr;
     }
-    CopyToClipboard(job->width, job->height, job->bgra.data(), job->png);
-    ui::PostToUi("{\"type\":\"snap-state\",\"state\":\"done\"}");
-    if (job->encoded)
-        SetTimer(overlay::Hwnd(), kSnapRevertTimerId, 1500, nullptr);
+    KillTimer(overlay::Hwnd(), kSnapWorkerTimerId);
+    MSG message;
+    while (PeekMessageW(&message, overlay::Hwnd(), WM_CRONQ_SNAP_DONE, WM_CRONQ_SNAP_DONE, PM_REMOVE)) {
+    }
+    auto job = std::move(g_workerJob);
+    RestoreOverlay();
+    if (job->status != screen_capture::Status::Ok) {
+        FinishJob(*job, screen_capture::Message(job->status), false);
+        return;
+    }
+    if (!job->encoded) {
+        FinishJob(*job, "Screenshot encoding failed. Nothing copied or saved.", false);
+        return;
+    }
+    g_pendingClipboard = std::move(job);
+    g_clipboardAttempts = 0;
+    OnClipboardRetry();
+}
+
+void OnWorkerPoll() {
+    if (g_worker && WaitForSingleObject(g_worker, 0) == WAIT_OBJECT_0) OnEncoded(g_workerJob.get());
+}
+
+void OnClipboardRetry() {
+    KillTimer(overlay::Hwnd(), kSnapClipboardTimerId);
+    if (!g_pendingClipboard) return;
+    auto& job = *g_pendingClipboard;
+    ++g_clipboardAttempts;
+    auto result = CopyToClipboard(job.width, job.height, job.bgra.data(), job.png);
+    if (result == ClipboardResult::Busy && g_clipboardAttempts == 1)
+        Log("SNAP", "Clipboard busy; retrying publication without blocking the UI");
+    if (result == ClipboardResult::Busy && g_clipboardAttempts < 20 &&
+        SetTimer(overlay::Hwnd(), kSnapClipboardTimerId, 25, nullptr))
+        return;
+    const bool copied = result == ClipboardResult::Published;
+    if (!copied) LogErr("SNAP", "Clipboard publication failed after %u attempt(s)", g_clipboardAttempts);
+    if (copied && (!job.save || (job.saved && job.latestUpdated)))
+        FinishJob(job, job.save ? "Screenshot saved and copied." : "Screenshot copied.", true);
+    else if (copied && job.saved)
+        FinishJob(job,
+                  "Screenshot saved and copied; latest screenshot index could not be "
+                  "updated.",
+                  false);
+    else if (copied)
+        FinishJob(job, "Screenshot copied, but could not be saved to disk.", false);
+    else if (job.saved)
+        FinishJob(job,
+                  "Screenshot saved, but clipboard is unavailable. Open it from the "
+                  "snaps folder.",
+                  false);
     else
-        ui::PostToUi("{\"type\":\"snap-state\",\"state\":\"camera\"}");
-    g_isSnapping = false;
+        FinishJob(job, "Screenshot could not be copied or saved.", false);
+    g_pendingClipboard.reset();
 }
 
 void OnSnapRevert() {
@@ -194,11 +322,13 @@ void OnSnapTimeout() {
         rw = GetSystemMetrics(SM_CXVIRTUALSCREEN);
         rh = GetSystemMetrics(SM_CYVIRTUALSCREEN);
     } else {
-        // The screen the user is working on: the foreground window's monitor (primary if none).
+        // The screen the user is working on: the foreground window's monitor
+        // (primary if none).
         HWND active = GetForegroundWindow();
         POINT ptZero = {0, 0};
-        HMONITOR hMon = active && active != overlay::Hwnd() ? MonitorFromWindow(active, MONITOR_DEFAULTTOPRIMARY)
-                                                            : MonitorFromPoint(ptZero, MONITOR_DEFAULTTOPRIMARY);
+        HMONITOR hMon = active && active != overlay::Hwnd()
+                            ? MonitorFromWindow(active, MONITOR_DEFAULTTOPRIMARY)
+                            : MonitorFromPoint(ptZero, MONITOR_DEFAULTTOPRIMARY);
         MONITORINFO mi;
         ZeroMemory(&mi, sizeof(mi));
         mi.cbSize = sizeof(mi);
@@ -215,82 +345,36 @@ void OnSnapTimeout() {
 
     size_t checkedBytes = 0;
     if (!image_logic::PixelBytes(rw, rh, &checkedBytes)) {
-        Cleanup();
+        RestoreOverlay();
+        Finish("Screen dimensions exceed the screenshot memory limit.", false);
         return;
     }
-    HDC screenDc = GetDC(nullptr);
-    HDC memDc = CreateCompatibleDC(screenDc);
-    HBITMAP bmp = CreateCompatibleBitmap(screenDc, rw, rh);
-    HGDIOBJ oldBmp = memDc && bmp ? SelectObject(memDc, bmp) : nullptr;
-    if (!screenDc || !memDc || !bmp || !oldBmp || oldBmp == HGDI_ERROR) {
-        if (bmp) DeleteObject(bmp);
-        if (memDc) DeleteDC(memDc);
-        if (screenDc) ReleaseDC(nullptr, screenDc);
-        LogErr("SNAP", "Cannot allocate capture bitmap (%lu)", GetLastError());
-        Cleanup();
-        ui::PostToUi("{\"type\":\"snap-state\",\"state\":\"camera\"}");
+    std::unique_ptr<SnapJob> job(new (std::nothrow) SnapJob());
+    if (!job) {
+        RestoreOverlay();
+        Finish("Not enough memory to take a screenshot.", false);
         return;
     }
-
-    bool captured = screenDc && memDc && bmp && oldBmp &&
-                    BitBlt(memDc, 0, 0, rw, rh, screenDc, rx, ry, SRCCOPY | CAPTUREBLT);
-
-    SelectObject(memDc, oldBmp);
-    ReleaseDC(nullptr, screenDc);
-    DeleteDC(memDc);
-
-    // Restore overlay visibility/affinity immediately
-    if (g_usedAffinity) {
-        SetWindowDisplayAffinity(overlay::Hwnd(), overlay::CaptureAffinity());
-    } else if (g_wasVisibleDuringSnap && overlay::IsVisible()) {
-        SetWindowPos(overlay::Hwnd(), HWND_TOPMOST, 0, 0, 0, 0,
-                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
-    }
-
-    // Extract pixels into BGRA top-down buffer
-    BITMAPINFO bi;
-    ZeroMemory(&bi, sizeof(bi));
-    bi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-    bi.bmiHeader.biWidth = rw;
-    bi.bmiHeader.biHeight = -rh;  // negative = top-down
-    bi.bmiHeader.biPlanes = 1;
-    bi.bmiHeader.biBitCount = 32;
-    bi.bmiHeader.biCompression = BI_RGB;
-
-    size_t pixelBytes = static_cast<size_t>(rw) * rh * 4;
-    std::vector<uint8_t> bgra(pixelBytes);
-    HDC dc = GetDC(nullptr);
-    captured = captured && GetDIBits(dc, bmp, 0, rh, bgra.data(), &bi, DIB_RGB_COLORS) == rh;
-    ReleaseDC(nullptr, dc);
-    DeleteObject(bmp);
-
-    if (!captured) {
-        LogErr("SNAP", "Screen capture failed (%lu)", GetLastError());
-        Cleanup();
-        ui::PostToUi("{\"type\":\"snap-state\",\"state\":\"camera\"}");
-        return;
-    }
-
-    // Set alpha to 0xFF for all pixels
-    for (size_t i = 3; i < pixelBytes; i += 4) {
-        bgra[i] = 0xFF;
-    }
-
-    Log("WINDOW", "Captured snap: %dx%d at (%d, %d)", rw, rh, rx, ry);
-
-    auto* job = new SnapJob();
     job->width = rw;
     job->height = rh;
-    job->bgra = std::move(bgra);
+    job->bounds = {rx, ry, rx + rw, ry + rh};
+    job->foreground =
+        g_backend == screen_capture::Backend::WgcWindow ? g_windowTarget : GetForegroundWindow();
+    if (job->foreground == overlay::Hwnd()) job->foreground = nullptr;
     job->save = cfg.snapSave;
     job->keepCount = cfg.snapKeepCount;
     job->notify = overlay::Hwnd();
-    g_worker = CreateThread(nullptr, 0, EncodeWorker, job, 0, nullptr);
-    if (!g_worker) {  // no thread: do it here rather than lose the capture
-        LogErr("SNAP", "Worker thread failed (%lu); encoding on the UI thread", GetLastError());
-        job->notify = nullptr;
-        EncodeWorker(job);
-        OnEncoded(job);
+    job->backend = g_backend;
+    g_worker = CreateThread(nullptr, 0, CaptureWorker, job.get(), 0, nullptr);
+    if (!g_worker) {
+        RestoreOverlay();
+        Finish("Could not start the screenshot worker. Try again.", false);
+        return;
+    }
+    g_workerJob = std::move(job);  // UI owns the job until the worker is joined
+    if (!SetTimer(overlay::Hwnd(), kSnapWorkerTimerId, 100, nullptr)) {
+        Cleanup();
+        Finish("Could not monitor the screenshot worker. Try again.", false);
     }
 }
 
@@ -301,39 +385,54 @@ bool Init() {
 }
 
 void Cleanup() {
-    if (g_worker) {  // let an in-flight encode finish writing; its result message is dropped
-        WaitForSingleObject(g_worker, 5000);
+    g_cancelled = true;
+    if (g_worker) {
+        // The worker uses finite acquisition/readback waits and checks
+        // cancellation. Join before destroying its HWND or shared state; never
+        // leave a writer running after teardown.
+        WaitForSingleObject(g_worker, INFINITE);
         CloseHandle(g_worker);
         g_worker = nullptr;
     }
-    if (g_usedAffinity)
-        SetWindowDisplayAffinity(overlay::Hwnd(), overlay::CaptureAffinity());
-    else if (g_isSnapping && g_wasVisibleDuringSnap && overlay::IsVisible())
-        SetWindowPos(overlay::Hwnd(), HWND_TOPMOST, 0, 0, 0, 0,
-                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
-    g_usedAffinity = false;
+    MSG message;
+    while (PeekMessageW(&message, overlay::Hwnd(), WM_CRONQ_SNAP_DONE, WM_CRONQ_SNAP_DONE, PM_REMOVE)) {
+    }
+    g_workerJob.reset();
+    g_pendingClipboard.reset();
+    RestoreOverlay();
     if (overlay::Hwnd()) {
         KillTimer(overlay::Hwnd(), kSnapCaptureTimerId);
         KillTimer(overlay::Hwnd(), kSnapRevertTimerId);
+        KillTimer(overlay::Hwnd(), kSnapClipboardTimerId);
+        KillTimer(overlay::Hwnd(), kSnapWorkerTimerId);
     }
     g_isSnapping = false;
 }
 
 bool IsSnapping() { return g_isSnapping; }
 
-void Run() {
+static void StartCapture(screen_capture::Backend backend) {
     if (g_isSnapping) {
         Log("WINDOW", "overlay_snap: capture already in progress; debounced.");
         return;
     }
     g_isSnapping = true;
+    g_backend = backend;
+    g_windowTarget = backend == screen_capture::Backend::WgcWindow ? GetForegroundWindow() : nullptr;
+    if (g_windowTarget) g_windowTarget = GetAncestor(g_windowTarget, GA_ROOT);
+    DWORD targetPid = 0;
+    if (g_windowTarget && GetWindowThreadProcessId(g_windowTarget, &targetPid) &&
+        targetPid == GetCurrentProcessId())
+        g_windowTarget = nullptr;  // do not accidentally capture Cronq's own UI
+    g_cancelled = false;
+    KillTimer(overlay::Hwnd(), kSnapRevertTimerId);
     ui::PostToUi("{\"type\":\"snap-state\",\"state\":\"snapping\"}");
 
     const AppConfig& cfg = config::Get();
     g_wasVisibleDuringSnap = overlay::IsVisible();
 
     if (g_wasVisibleDuringSnap) {
-        // Try WDA_EXCLUDEFROMCAPTURE (0x00000011)
+        // WDA_EXCLUDEFROMCAPTURE is supported by all Windows 11 releases.
         BOOL affinityOk = SetWindowDisplayAffinity(overlay::Hwnd(), 0x00000011);
         if (affinityOk) {
             g_usedAffinity = true;
@@ -343,17 +442,21 @@ void Run() {
         }
         int delay = std::max(60, cfg.snapDelayMs);
         if (!SetTimer(overlay::Hwnd(), kSnapCaptureTimerId, delay, nullptr)) {
-            Cleanup();
-            OnSnapRevert();
+            RestoreOverlay();
+            Finish("Could not schedule the screenshot. Try again.", false);
         }
     } else {
         g_usedAffinity = false;
         if (!SetTimer(overlay::Hwnd(), kSnapCaptureTimerId, 1, nullptr)) {
-            Cleanup();
-            OnSnapRevert();
+            RestoreOverlay();
+            Finish("Could not schedule the screenshot. Try again.", false);
         }
     }
 }
+
+void Run() { StartCapture(screen_capture::Backend::Automatic); }
+void RunExperimental() { StartCapture(screen_capture::Backend::Wgc); }
+void RunExperimentalWindow() { StartCapture(screen_capture::Backend::WgcWindow); }
 
 }  // namespace snap
 }  // namespace cronq

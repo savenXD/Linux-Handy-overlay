@@ -70,6 +70,8 @@ int64_t DedupeUs(Id id) {
         case Id::DefaultSize:
             return 200000;
         case Id::Snap:
+        case Id::SnapWgc:
+        case Id::SnapWgcWindow:
             return 200000;
         case Id::Mode:
             return 150000;
@@ -101,6 +103,10 @@ const char* Describe(Id id) {
             return "Alt+D -> Default size";
         case Id::Snap:
             return "Alt+Snap -> Taking snap";
+        case Id::SnapWgc:
+            return "Alt+O -> Taking experimental WGC snap";
+        case Id::SnapWgcWindow:
+            return "Alt+Shift+O -> Taking experimental WGC window snap";
         case Id::Mode:
             return "Alt+Mode -> Cycling key mode";
         case Id::GhostWrite:
@@ -228,11 +234,12 @@ LRESULT CALLBACK LowLevelKeyboardProc(int code, WPARAM wp, LPARAM lp) {
     if (down && !wasDown && vk == VK_CAPITAL) InterlockedXor(&g_capsLock, 1);
     if (down && !wasDown && vk == VK_NUMLOCK) InterlockedXor(&g_numLock, 1);
     const unsigned mods = Modifiers();
-    Id id = vk == 'C' ? Id::Camouflage : vk == 'T' ? Id::Tone :
+    Id id = vk == 'O' ? (mods == 9 ? Id::SnapWgcWindow : Id::SnapWgc) : vk == 'C' ? Id::Camouflage : vk == 'T' ? Id::Tone :
             vk == VK_LEFT ? Id::DockLeft : vk == VK_RIGHT ? Id::DockRight : Match(vk);
     input_logic::Context context;
     if (IsLayoutHotkey(id) && !InterlockedCompareExchange(&g_overlayVisible, 0, 0)) id = Id::None;
     context.hotkey = id != Id::None && (mods == 1 || ((kb->flags & LLKHF_ALTDOWN) && !(mods & 14)));
+    if (id == Id::SnapWgcWindow) context.hotkey = mods == 9;  // Alt+Shift only; never Ctrl/Win
     const bool locked = InterlockedCompareExchange(&g_locked, 0, 0) != 0;
     if (locked) {
         context.hotkey = false;  // locked: every normal hotkey is off
@@ -433,13 +440,14 @@ void ReloadKeys() {
     g_vk[(int)Id::Fullscreen] = 'F';
     g_vk[(int)Id::DefaultSize] = 'D';
     g_vk[(int)Id::Snap] = VkFromChar(cfg.snapKey ? cfg.snapKey : 'p');
+    g_vk[(int)Id::SnapWgc] = 'O';
     g_vk[(int)Id::Mode] = VkFromChar(cfg.modeKey ? cfg.modeKey : 'm');
     g_vk[(int)Id::GhostWrite] = VkFromChar(cfg.ghostWriterKey ? cfg.ghostWriterKey : 'w');
     LeaveCriticalSection(&g_vkCs);
 
     Log("HOTKEY",
         "Hotkeys: Alt+%c toggle, Alt+%c ghost, Alt+A/S opacity, Alt+F fullscreen, Alt+D default size, "
-        "Alt+%c snap, Alt+%c mode, Alt+%c ghost writer.",
+        "Alt+%c snap, Alt+O WGC monitor, Alt+Shift+O WGC window, Alt+%c mode, Alt+%c ghost writer.",
         (char)toupper(cfg.toggleKey), (char)toupper(cfg.ghostKey), (char)toupper(cfg.snapKey),
         (char)toupper(cfg.modeKey), (char)toupper(cfg.ghostWriterKey));
 }
@@ -551,6 +559,12 @@ void Dispatch(Id id) {
             break;
         case Id::Snap:
             snap::Run();
+            break;
+        case Id::SnapWgc:
+            snap::RunExperimental();
+            break;
+        case Id::SnapWgcWindow:
+            snap::RunExperimentalWindow();
             break;
         case Id::GhostWrite:
             ghost::Run();

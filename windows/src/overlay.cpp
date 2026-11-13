@@ -699,6 +699,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 snap::OnSnapRevert();
                 return 0;
             }
+            if (wp == snap::kSnapClipboardTimerId) {
+                snap::OnClipboardRetry();
+                return 0;
+            }
+            if (wp == snap::kSnapWorkerTimerId) {
+                snap::OnWorkerPoll();
+                return 0;
+            }
             if (wp == ghost::kGhostCountdownTimerId) {
                 ghost::OnCountdownTick();
                 return 0;

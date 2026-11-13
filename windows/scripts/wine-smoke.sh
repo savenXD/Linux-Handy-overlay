@@ -62,7 +62,7 @@ for test in config_test parity_config_test; do
 done
 
 echo "== Phase 2 pure logic tests"
-for test in browser_logic_test jsonlite_test log_rotate_test geometry_test ghost_logic_test snap_logic_test ini_writer_test key_translate_test input_logic_test lock_logic_test recovery_logic_test purge_logic_test update_logic_test image_logic_test image_codec_test crash_report_test; do
+for test in capture_logic_test browser_logic_test jsonlite_test log_rotate_test geometry_test ghost_logic_test snap_logic_test ini_writer_test key_translate_test input_logic_test lock_logic_test recovery_logic_test purge_logic_test update_logic_test image_logic_test image_codec_test crash_report_test; do
     if out=$(timeout 60 wine "$BIN/$test.exe" 2>/dev/null | tr -d '\r'); then
         printf '%s\n' "$out"
         check "$test" "$out" "all checks passed"

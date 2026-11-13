@@ -51,6 +51,9 @@ set(CORE_SOURCES
     src/ini_writer.cpp
     src/key_translate.cpp
     src/snap.cpp
+    src/screen_capture.cpp
+    src/wgc_capture.cpp
+    src/capture_logic.cpp
     src/snap_logic.cpp
     src/purge.cpp
     src/purge_logic.cpp
@@ -60,7 +63,7 @@ set(CORE_SOURCES
 
 add_library(cronq_core STATIC ${CORE_SOURCES})
 target_include_directories(cronq_core PUBLIC src "${CMAKE_CURRENT_BINARY_DIR}")
-target_link_libraries(cronq_core PUBLIC user32 gdi32 dwmapi shell32 advapi32 ole32 oleaut32 wtsapi32 windowscodecs winhttp bcrypt)
+target_link_libraries(cronq_core PUBLIC user32 gdi32 dwmapi shell32 advapi32 ole32 oleaut32 wtsapi32 windowscodecs winhttp bcrypt d3d11 dxgi dxguid runtimeobject)
 target_compile_definitions(cronq_core PUBLIC UNICODE _UNICODE _CRT_SECURE_NO_WARNINGS)
 
 # cronq.exe  - console build: the command line tool.
@@ -179,7 +182,7 @@ if(CMAKE_CROSSCOMPILING AND NOT CMAKE_HOST_WIN32)
 endif()
 add_test(NAME config_parser COMMAND config_test "${CRONQ_FIXTURE}")
 
-foreach(t browser_logic_test jsonlite_test log_rotate_test geometry_test ghost_logic_test snap_logic_test ini_writer_test key_translate_test input_logic_test lock_logic_test theme_logic_test image_logic_test image_codec_test crash_report_test recovery_logic_test purge_logic_test update_logic_test)
+foreach(t capture_logic_test browser_logic_test jsonlite_test log_rotate_test geometry_test ghost_logic_test snap_logic_test ini_writer_test key_translate_test input_logic_test lock_logic_test theme_logic_test image_logic_test image_codec_test crash_report_test recovery_logic_test purge_logic_test update_logic_test)
     add_executable(${t} tests/${t}.cpp)
     target_link_libraries(${t} PRIVATE cronq_core)
     if(MSVC)
@@ -202,7 +205,14 @@ add_test(NAME parity_config
 
 # MinGW / llvm-mingw: link every executable statically so there are no libc++/libgcc DLLs to ship or lose.
 if(NOT MSVC)
-    foreach(t cronq cronqw sendkeys config_test browser_logic_test jsonlite_test log_rotate_test geometry_test parity_config_test ghost_logic_test snap_logic_test ini_writer_test key_translate_test input_logic_test lock_logic_test theme_logic_test image_logic_test image_codec_test crash_report_test recovery_logic_test purge_logic_test update_logic_test)
+    foreach(t cronq cronqw sendkeys config_test capture_logic_test browser_logic_test jsonlite_test log_rotate_test geometry_test parity_config_test ghost_logic_test snap_logic_test ini_writer_test key_translate_test input_logic_test lock_logic_test theme_logic_test image_logic_test image_codec_test crash_report_test recovery_logic_test purge_logic_test update_logic_test)
         target_link_options(${t} PRIVATE -static)
     endforeach()
+endif()
+
+# Requires an unlocked interactive desktop; intentionally separate from headless CTest.
+add_executable(capture_runtime_test tests/capture_runtime_test.cpp)
+target_link_libraries(capture_runtime_test PRIVATE cronq_core)
+if(NOT MSVC)
+    target_link_options(capture_runtime_test PRIVATE -static)
 endif()

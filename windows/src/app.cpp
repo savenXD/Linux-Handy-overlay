@@ -89,6 +89,10 @@ std::string HandleCommand(const std::string& rawLine) {
         browser::ClosePopup();
     } else if (EqNoCase(line, "SNAP")) {
         snap::Run();
+    } else if (EqNoCase(line, "SNAP_WGC")) {
+        snap::RunExperimental();
+    } else if (EqNoCase(line, "SNAP_WGC_WINDOW")) {
+        snap::RunExperimentalWindow();
     } else if (EqNoCase(line, "GHOST_WRITE")) {
         ghost::Run();
     } else if (EqNoCase(line, "PASTE")) {

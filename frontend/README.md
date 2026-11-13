@@ -1,6 +1,6 @@
 # Cronq download frontend
 
-A static page with the Cronq name and a Windows download button. No build tools or dependencies.
+A static 404-style page with a hidden Windows installer download. No build tools or runtime dependencies.
 
 From the repository root, run:
 
@@ -8,8 +8,17 @@ From the repository root, run:
 python -m http.server 5174 --bind 127.0.0.1 --directory frontend
 ```
 
-Open http://127.0.0.1:5174 in your browser.
+Open http://127.0.0.1:5174 in your browser. Double-click **HTTP ERROR 404**, enter the existing secret code,
+and select Continue. The code and encrypted URL remain unchanged.
 
-For hosting later, use `frontend` as the static site directory. The download button points to
-the latest published GitHub release asset named `cronq-setup.exe` (the URL is stored encrypted in `index.html` and only unlocked by the secret code). Publish a new release with that
-same asset name to update the download. The Windows v1.0.0 release packages the current Windows features.
+Use `frontend` as the static site directory. The gate unlocks
+`https://github.com/savenXD/Linux-Handy-overlay/releases/latest/download/cronq-setup.exe`.
+Publishing a new non-prerelease GitHub release marked **Latest**, with the installer asset named
+`cronq-setup.exe`, updates the download without redeploying the page or changing its encrypted blob.
+The version in `windows/VERSION`, tag, release notes and installer must agree. The Windows workflow
+builds/tests the source, creates the installer and checksum, then publishes those release assets.
+
+Run `node frontend/test-download.mjs` to test the actual gate script. Set `CRONQ_DOWNLOAD_CODE` locally
+to include the real-code and latest-URL checks. The test does not print or persist the code and does
+not navigate or download anything. Verify the published installer's SHA-256 against `SHA256SUMS.txt`
+after release; a successful source push alone does not update the downloadable installer.

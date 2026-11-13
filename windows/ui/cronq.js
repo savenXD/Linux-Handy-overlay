@@ -35,6 +35,7 @@
   function setSnapState(st) {
     if (st === 'snapping') setSnapIcon('icon-snapping');
     else if (st === 'done') setSnapIcon('icon-check');
+    else if (st === 'failed') setSnapIcon('icon-failed');
     else setSnapIcon('icon-camera');
   }
   function slot() {

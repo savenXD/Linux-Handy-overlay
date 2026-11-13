@@ -299,6 +299,8 @@ int Help(const char* prog) {
     printf("  --kill, kill                  Kill running overlay daemon\n");
     printf("  --status, status              Query running overlay status\n");
     printf("  --snap, snap                  Capture screenshot (excluding overlay) to clipboard & disk\n");
+    printf("  --snap-wgc, snap-wgc          Temporary Windows 11 WGC screenshot test (Alt+O)\n");
+    printf("  --snap-wgc-window             Foreground-window WGC test (Alt+Shift+O)\n");
     printf("  --mode [m|e]                  Set or cycle typing mode (mirror / exclusive)\n");
     printf("  --ghost [on|off]              Set or toggle GHOST click-through mode\n");
     printf("  --app <name>                  Switch app view (home, chatgpt, browser)\n");
@@ -440,6 +442,10 @@ int RunCli(const std::vector<std::string>& args) {
             return Remote("CLOSE_MODAL", nullptr);
         } else if (is("--snap") || is("snap")) {
             return Remote("SNAP", nullptr);
+        } else if (is("--snap-wgc") || is("snap-wgc")) {
+            return Remote("SNAP_WGC", nullptr);
+        } else if (is("--snap-wgc-window") || is("snap-wgc-window")) {
+            return Remote("SNAP_WGC_WINDOW", nullptr);
         } else if (is("--ghost-write") || is("--ghost-writer")) {
             return Remote("GHOST_WRITE", nullptr);
         } else if (is("--paste")) {

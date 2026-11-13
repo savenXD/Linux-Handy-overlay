@@ -15,6 +15,8 @@ enum class Id : int {
     Fullscreen,   // Alt+F
     DefaultSize,  // Alt+D
     Snap,         // Alt+P
+    SnapWgc,      // Alt+O: temporary Windows Graphics Capture experiment
+    SnapWgcWindow, // Alt+Shift+O: foreground window via WGC
     Mode,         // Alt+M
     GhostWrite,   // Alt+W
     Camouflage,   // Alt+C toggles minimal camouflage

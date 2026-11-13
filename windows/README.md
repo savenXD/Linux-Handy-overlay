@@ -1,12 +1,12 @@
-# Cronq v1.2.0 for Windows
+# Cronq v1.3.0 for Windows
 
 Cronq is a floating companion window shaped like a phone (default 360x640 pixels, rounded corners, dark theme) that stays visible on top of other software—including borderless-fullscreen apps and games—without ever stealing keyboard focus. Inside it: a mobile browser, ChatGPT with persistent login sessions, Ghost Typer for human-like automated typing, clean screen captures (Snap) excluding the overlay, and the ability to type into the overlay without losing focus on whatever app you are using underneath.
 
 The Windows release is a native C++17 implementation using Win32 and Microsoft Edge WebView2.
-Version 1.2.0 is a reliability, privacy and performance release on top of the 1.1 features (Light/Dark themes, camouflage, locking, corner docking, capture protection).
+Version 1.3.0 improves screenshot reliability and adds experimental monitor/window capture on Windows 11.
 Native Windows checks cover transparent text rendering, theme persistence, lock behavior, shortcuts,
 and docking across a restart. ChatGPT styling is tested with a local fixture; live site changes and
-application-specific behavior can still require adjustments. See [release notes](v1.2.0.md) and
+application-specific behavior can still require adjustments. See [release notes](v1.3.0.md) and
 [PARITY.md](PARITY.md) for evidence and limits.
 
 [Download the latest Windows installer](https://github.com/savenXD/Linux-Handy-overlay/releases/latest/download/cronq-setup.exe).
@@ -84,6 +84,8 @@ While the overlay is **hidden**, only Alt+X, Alt+P, Alt+W, Alt+K and Alt+Shift+K
 | **Alt+F** | Toggle Fullscreen mode | *fixed* | `f` |
 | **Alt+D** | Reset to default size (360x640) and corner position | *fixed* | `d` |
 | **Alt+P** | Snap screenshot of the screen you are working on (clipboard, and `%LOCALAPPDATA%\cronq\snaps`) | `snap_key` | `p` |
+| **Alt+O** | **Temporary Windows 11 experiment:** WGC-only screenshot; Windows may display a capture border. Clipboard and `%LOCALAPPDATA%\cronq\snaps-wgc` | *fixed, temporary* | `o` |
+| **Alt+Shift+O** | **Temporary Windows 11 experiment:** direct foreground-window WGC capture; clipboard and `%LOCALAPPDATA%\cronq\snaps-wgc-window` | *fixed, temporary* | `Shift+o` |
 | **Alt+M** | Cycle typing mode: Mirror ⇄ Exclusive | `mode_key` | `m` |
 | **Alt+W** | Ghost Writer start / cancel typing | `ghost_writer_key` | `w` |
 | **Alt+C** | Toggle minimal camouflage; press again to restore the previous Light/Dark mode | *fixed* | `c` |
@@ -93,6 +95,18 @@ While the overlay is **hidden**, only Alt+X, Alt+P, Alt+W, Alt+K and Alt+Shift+K
 | **Alt+K** | **Lock**: hide the overlay and disable every other Cronq shortcut. No confirmation. | *fixed* | `k` |
 | **Alt+K+X** | **Unlock** (hold Alt and K, then X, or X then K): shortcuts work again and the overlay reappears | *fixed* | `k`+`x` |
 | **Alt+Shift+K** | **Kill switch**: on-screen prompt; **Enter** confirms; **Esc**, any other key, or 15 s of no answer cancels. While hidden the prompt is invisible and expires after 5 s | *fixed* | `k` |
+
+Screenshots use GPU desktop duplication with a GDI compatibility fallback. Entirely black captures,
+protected content and inaccessible desktops produce an error instead of publishing a black image.
+Clipboard and disk failures are reported separately. See [screenshot reliability and native tests](SCREENSHOTS.md).
+
+Alt+O runs **Windows Graphics Capture only**, without falling back to DXGI/GDI. It works while Cronq
+is hidden and is disabled by Alt+K. Normal Alt+P and the camera button keep their existing behavior.
+The O key is reserved for this experiment even if a configured shortcut also uses O. CLI equivalent:
+`cronq snap-wgc`. The latest experimental file is `%LOCALAPPDATA%\cronq\latest_snap_wgc.png`.
+Alt+Shift+O selects the external foreground window when pressed and uses its actual WGC dimensions.
+Its CLI equivalent is `cronq snap-wgc-window`, with latest image `latest_snap_wgc_window.png`.
+WGC chooses the target display's GPU where available and rebuilds the capture session once after device loss.
 
 ### Kill switch (Alt+Shift+K)
 On **Enter**, Cronq quits and a detached native cleanup (a copy of `cronqw.exe` run from `%TEMP%` with `--purge`;

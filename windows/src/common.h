@@ -31,7 +31,7 @@
 #define WM_CRONQ_HOTKEY (WM_APP + 2)  // wParam = hotkey::Id
 #define WM_CRONQ_QUIT (WM_APP + 3)
 #define WM_CRONQ_BROWSER_RECOVER (WM_APP + 8)
-#define WM_CRONQ_SNAP_DONE (WM_APP + 9)      // lParam = snap job from the encoder thread
+#define WM_CRONQ_SNAP_DONE (WM_APP + 9)      // lParam = snap job from the capture worker
 #define WM_CRONQ_ALTFIX (WM_APP + 4)  // inject the "menu bar suppressor" key
 #define WM_CRONQ_CLICK (WM_APP + 5)   // wParam = isInside (1/0)
 #define WM_CRONQ_KEY \

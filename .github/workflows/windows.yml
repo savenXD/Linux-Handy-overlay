@@ -32,6 +32,11 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Download frontend gate regression
+        run: node frontend/test-download.mjs
       - name: Configure
         run: cmake -S windows -B windows/build -A x64
       - name: Build
