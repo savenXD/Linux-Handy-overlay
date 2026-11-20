@@ -25,17 +25,9 @@
 #define M_PI 3.14159265358979323846
 #endif
 
-static const char *s_svg_back_icon =
-    "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#e4e4e7\" stroke-width=\"2.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\">"
-    "<line x1=\"19\" y1=\"12\" x2=\"5\" y2=\"12\"/>"
-    "<polyline points=\"12 19 5 12 12 5\"/>"
-    "</svg>";
 
-static const char *s_svg_home_icon =
-    "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#e4e4e7\" stroke-width=\"2.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\">"
-    "<path d=\"M3 9.5L12 3l9 6.5V20a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9.5z\"/>"
-    "<polyline points=\"9 22 9 12 15 12 15 22\"/>"
-    "</svg>";
+
+
 
 static const char *s_svg_check_icon =
     "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#22c55e\" stroke-width=\"2.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\">"
@@ -48,11 +40,9 @@ static const char *s_svg_failed_icon =
     "<line x1=\"6\" y1=\"6\" x2=\"18\" y2=\"18\"/>"
     "</svg>";
 
-static const char *s_svg_camera_icon =
-    "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#e4e4e7\" stroke-width=\"2.3\" stroke-linecap=\"round\" stroke-linejoin=\"round\">"
-    "<path d=\"M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z\"/>"
-    "<circle cx=\"12\" cy=\"13\" r=\"4\"/>"
-    "</svg>";
+static const char *s_svg_report_icon =
+    "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"12\" height=\"12\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#e4e4e7\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\">"
+    "<path d=\"M14 3H6v18h12V7l-4-4Z\"/><path d=\"M14 3v5h4M9 12h6M9 16h4\"/></svg>";
 
 static const char *s_svg_snap_running =
     "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#38bdf8\" stroke-width=\"2.5\" stroke-linecap=\"round\">"
@@ -65,38 +55,12 @@ static const char *s_svg_close_icon =
     "<line x1=\"6\" y1=\"6\" x2=\"18\" y2=\"18\"/>"
     "</svg>";
 
-static const char *s_svg_universal_refresh_icon =
-    "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#ffffff\" stroke-width=\"2.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\">"
-    "<path d=\"M20 4v5h-5\"/>"
-    "<path d=\"M20 9a8 8 0 1 0 .2 5\"/>"
-    "</svg>";
 
-static const char *s_svg_chatgpt_icon =
-    "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"64\" height=\"64\" viewBox=\"0 0 64 64\">"
-    "<rect x=\"1\" y=\"1\" width=\"62\" height=\"62\" rx=\"16\" ry=\"16\" fill=\"#121214\" stroke=\"#2a2a2a\" stroke-width=\"1.2\"/>"
-    "<g transform=\"translate(16, 16) scale(1.3333)\">"
-    "<path fill=\"#ffffff\" d=\"M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9897 5.9897 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1683a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4947zm-9.66-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1402-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1683a.0757.0757 0 0 1-.071 0l-4.8303-2.7866A4.504 4.504 0 0 1 2.3408 7.8956zm16.0993 3.8558L12.5973 8.3829l2.02-1.1636a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.4023-.682zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1635a.0804.0804 0 0 1-.038-.0567V6.0748a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.4598a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.6069 1.4997-2.602-1.4997z\"/>"
-    "</g>"
-    "</svg>";
 
-static const char *s_svg_move_grip =
-    "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"8\" viewBox=\"0 0 24 8\" fill=\"none\">"
-    "<rect x=\"2\" y=\"2\" width=\"20\" height=\"4\" rx=\"2\" fill=\"#525252\"/>"
-    "</svg>";
-
-static const char *s_svg_fullscreen_icon =
-    "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"13\" height=\"13\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#a1a1aa\" stroke-width=\"2.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\">"
-    "<polyline points=\"15 3 21 3 21 9\"/>"
-    "<polyline points=\"9 21 3 21 3 15\"/>"
-    "<line x1=\"21\" y1=\"3\" x2=\"14\" y2=\"10\"/>"
-    "<line x1=\"3\" y1=\"21\" x2=\"10\" y2=\"14\"/>"
-    "</svg>";
-
-static const char *s_svg_top_close_icon =
-    "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"13\" height=\"13\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#a1a1aa\" stroke-width=\"2.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\">"
-    "<line x1=\"18\" y1=\"6\" x2=\"6\" y2=\"18\"/>"
-    "<line x1=\"6\" y1=\"6\" x2=\"18\" y2=\"18\"/>"
-    "</svg>";
+static const char *s_svg_error_icon =
+    "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"32\" height=\"36\" viewBox=\"0 0 32 36\" fill=\"none\" stroke=\"#a1a1aa\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\">"
+    "<path d=\"M19 2H6a2 2 0 0 0-2 2v28a2 2 0 0 0 2 2h20a2 2 0 0 0 2-2V11L19 2Z\"/>"
+    "<path d=\"M19 2v9h9M11 19h.01M21 19h.01M11 27c3-3 7-3 10 0\"/></svg>";
 
 typedef struct {
     GtkWidget  *img;
@@ -129,7 +93,7 @@ static void on_svg_image_finalized(gpointer data, GObject *where_the_object_was)
 /* App-tile icons keep their own colours in every theme; UI-chrome icons follow the theme. */
 static GtkWidget *create_svg_image(const char *svg_str, int width, int height) {
     if (!svg_str) return gtk_label_new("");
-    gboolean themed = !(svg_str == s_svg_chatgpt_icon);
+    gboolean themed = TRUE;
     GdkPixbuf *pb = render_svg_pixbuf(svg_str, width, height, themed);
     if (!pb) return gtk_label_new("");
     GtkWidget *img = gtk_image_new_from_pixbuf(pb);
@@ -157,11 +121,11 @@ static void refresh_themed_svgs(void) {
 }
 
 static GtkCssProvider *s_css_provider = NULL;
+static GtkWidget *s_error_icon = NULL;
+static GtkWidget *s_error_code = NULL;
 static GtkWidget *s_status_bar = NULL;
+static GtkWidget *s_status_pills = NULL;
 static GtkWidget *s_bottom_nav = NULL;
-static GtkWidget *s_theme_btn = NULL;
-static GtkWidget *s_theme_btn_label = NULL;
-static GPtrArray *s_app_labels = NULL;
 
 static gboolean s_capture_hidden = FALSE;
 static gboolean s_is_snapping = FALSE;
@@ -186,8 +150,6 @@ static GtkWidget *s_grab_box = NULL;
 static GtkWidget *s_grab_pill_label = NULL;
 
 static GtkWidget *s_move_handle_eb = NULL;
-static GtkWidget *s_btn_top_fullscreen = NULL;
-static GtkWidget *s_btn_top_close = NULL;
 
 static GtkWidget *s_btn_back = NULL;
 static GtkWidget *s_btn_home = NULL;
@@ -195,9 +157,6 @@ static GtkWidget *s_btn_universal_refresh = NULL;
 static GtkWidget *s_btn_snap = NULL;
 static GtkWidget *s_snap_stack = NULL;
 
-static GtkWidget *s_toast_box = NULL;
-static GtkWidget *s_toast_label = NULL;
-static guint      s_toast_timer_id = 0;
 
 static GtkWidget *s_popup_container = NULL;
 static GtkWidget *s_popup_child_view = NULL;
@@ -255,21 +214,11 @@ static const char *s_phone_css =
     /* ---- window controls ---- */
     ".move-capsule { padding: 4px 8px; border-radius: 6px; background: transparent; }"
     ".move-capsule:hover { background-color: #161616; }"
-    ".top-ctrl-btn { background: transparent; background-image: none; box-shadow: none; border: none; padding: 3px; min-width: 20px; min-height: 20px; border-radius: 6px; }"
-    ".top-ctrl-btn:hover { background-color: #1f1f1f; }"
-    ".top-close-btn:hover { background-color: #ef4444; }"
-    ".theme-btn { background: transparent; background-image: none; box-shadow: none; border: 1px solid #262626; border-radius: 6px; padding: 1px 7px; min-height: 0; }"
-    ".theme-btn label { color: #e5e5e5; font-size: 10px; }"
-    ".theme-btn:hover { background-color: #1f1f1f; }"
     ".resize-grip { opacity: 0.4; padding: 2px; }"
     ".resize-grip:hover { opacity: 1.0; }"
     /* ---- retained shell ---- */
     /* ---- home ---- */
     ".home-page { background-color: #000000; }"
-    ".app-button { background: transparent; background-image: none; box-shadow: none; border: none; padding: 12px 18px; margin: 0; border-radius: 14px; }"
-    ".app-button:hover { background-color: #161616; }"
-    ".app-button:active { background-color: #222222; }"
-    ".app-label { font-size: 12px; font-weight: 500; color: #e5e5e5; margin-top: 8px; }"
     /* ---- bottom bar ---- */
     ".bottom-nav { background-color: #000000; padding: 6px 12px 8px; border-top: 1px solid #1a1a1a; border-radius: 0 0 21px 21px; }"
     ".nav-button { background: transparent; background-image: none; box-shadow: none; border: none; padding: 6px 4px; min-height: 34px; min-width: 0; border-radius: 10px; }"
@@ -282,13 +231,37 @@ static const char *s_phone_css =
     ".nav-button.nav-selected label { color: #ffffff; font-weight: 600; }"
     ".nav-refresh-btn { background: transparent; }"
     /* ---- toast / popup ---- */
-    ".toast-box { background-color: #ffffff; border: none; border-radius: 8px; padding: 7px 16px; }"
-    ".toast-label { color: #000000; font-size: 11.5px; font-weight: 600; }"
     ".popup-modal-layer { background-color: #000000; border-radius: 18px; }"
     ".popup-modal-bar { padding: 7px 12px; background-color: #0a0a0a; border-bottom: 1px solid #1a1a1a; }"
     ".popup-modal-title { color: #ffffff; font-size: 12px; font-weight: 600; }"
     ".popup-close-btn { background: transparent; border: none; padding: 4px 8px; border-radius: 6px; }"
-    ".popup-close-btn:hover { background-color: #ef4444; }";
+    ".popup-close-btn:hover { background-color: #ef4444; }"
+    ".phone-root { border-radius: 10px; border-color: #2a2a2a; }"
+    ".status-bar { padding: 2px 12px; border-radius: 9px 9px 0 0; border-color: #1a1a1a; }"
+    ".nav-pill { padding: 9px 6px; }"
+    ".nav-pill-dot { min-width: 7px; min-height: 7px; }"
+    ".move-capsule { padding: 0; } .move-capsule:hover { background: transparent; }"
+    ".home-page { padding: 12px; }"
+    ".error-symbol { margin-bottom: 12px; opacity: 0.8; }"
+    ".error-code { font-size: 9px; letter-spacing: 1.5px; color: #a0a0a0; margin-bottom: 8px; }"
+    ".error-title { font-size: 20px; font-weight: 600; letter-spacing: -0.5px; color: #ffffff; margin-bottom: 9px; }"
+    ".error-description { font-size: 12px; color: #a0a0a0; }"
+    ".bottom-nav { padding: 7px 12px; border-radius: 0 0 9px 9px; border-color: #1a1a1a; }"
+    ".nav-button { min-height: 18px; padding: 5px 3px; border-radius: 5px; }"
+    ".nav-button label { font-size: 10px; }"
+    ".nav-button.nav-selected { background: transparent; }"
+    ".nav-button.nav-selected label { font-weight: 400; color: #a0a0a0; }"
+    ".nav-button:disabled { opacity: 0.35; }"
+    ".nav-refresh-btn { border: 1px solid #333333; } .nav-refresh-btn label { color: #ffffff; }"
+    ".nav-refresh-btn { border-color: transparent; }"
+    ".bottom-nav { padding: 8px 12px 3px; border-top: none; }"
+    ".nav-button { min-height: 26px; padding: 5px 3px 1px; }"
+    ".nav-button:hover, .nav-button:active { background: transparent; }"
+    ".nav-target-dot { min-width: 2px; min-height: 2px; border-radius: 99px; background-color: #474747; }"
+    ".small-error .home-page { padding: 8px 12px; }"
+    ".small-error .error-title { font-size: 17px; margin-bottom: 6px; }"
+    ".small-error .error-code { font-size: 8px; margin-bottom: 5px; }"
+    ".small-error .error-description { font-size: 11px; }";
 
 static void update_x11_state_properties(void) {
     if (s_xid == None) return;
@@ -486,6 +459,16 @@ double overlay_get_opacity(void) {
     return s_current_opacity;
 }
 
+static void update_error_density(int width, int height) {
+    if (!s_root_box || !s_error_icon) return;
+    GtkStyleContext *style = gtk_widget_get_style_context(s_root_box);
+    if (width < 290 || height <= 240) gtk_style_context_add_class(style, "small-error");
+    else gtk_style_context_remove_class(style, "small-error");
+    gtk_widget_set_no_show_all(s_error_icon, height <= 240);
+    if (height <= 240) gtk_widget_hide(s_error_icon);
+    else gtk_widget_show(s_error_icon);
+}
+
 void overlay_set_size(int width, int height) {
     if (!s_window) return;
 
@@ -497,6 +480,7 @@ void overlay_set_size(int width, int height) {
     if (height < OVERLAY_MIN_HEIGHT) height = OVERLAY_MIN_HEIGHT;
     if (height > screen_h) height = screen_h;
 
+    update_error_density(width, height);
     if (width == s_win_width && height == s_win_height) {
         if (s_xid != None) {
             Display *xdpy = gdk_x11_display_get_xdisplay(gdk_display_get_default());
@@ -612,6 +596,7 @@ void overlay_set_compact_mode(gboolean compact) {
 static void on_window_size_allocate(GtkWidget *widget, GdkRectangle *allocation, gpointer user_data) {
     (void)user_data;
     (void)widget;
+    update_error_density(allocation->width, allocation->height);
     if (allocation->width != s_win_width || allocation->height != s_win_height) {
         int old_h = s_win_height;
         s_win_width = allocation->width;
@@ -933,27 +918,9 @@ static void on_btn_snap_clicked(GtkButton *btn, gpointer user_data) {
     overlay_snap();
 }
 
-static gboolean on_toast_dismiss_timeout(gpointer user_data) {
-    (void)user_data;
-    s_toast_timer_id = 0;
-    if (s_toast_box) {
-        gtk_widget_hide(s_toast_box);
-    }
-    return G_SOURCE_REMOVE;
-}
-
 void overlay_show_toast(const char *msg) {
-    if (theme_is_camo()) return;   /* camouflage shows no toasts, as on Windows */
-    if (!s_toast_box || !s_toast_label || !msg) return;
-
-    gtk_label_set_text(GTK_LABEL(s_toast_label), msg);
-    gtk_widget_show(s_toast_label);
-    gtk_widget_show(s_toast_box);
-
-    if (s_toast_timer_id > 0) {
-        g_source_remove(s_toast_timer_id);
-    }
-    s_toast_timer_id = g_timeout_add(2200, on_toast_dismiss_timeout, NULL);
+    /* Status stays in the log; the overlay never opens a notification bubble. */
+    if (msg) xutil_log("STATUS", "%s", msg);
 }
 
 static GtkWidget *create_nav_pill(GtkWidget **out_box, GtkWidget **out_dot, GtkWidget **out_label, const char *initial_text) {
@@ -1002,66 +969,51 @@ static gboolean on_ghost_pill_clicked(GtkWidget *widget, GdkEventButton *event, 
     return TRUE;
 }
 
-static void on_btn_top_fullscreen_clicked(GtkButton *btn, gpointer user_data) {
-    (void)btn; (void)user_data;
-    overlay_set_fullscreen();
-}
-
-static void on_btn_top_close_clicked(GtkButton *btn, gpointer user_data) {
-    (void)btn; (void)user_data;
-    overlay_hide();
-}
-
-
-static void on_app_icon_clicked(GtkButton *btn, gpointer user_data) {
-    (void)btn;
-    const char *app = (const char *)user_data;
-    if (g_ascii_strcasecmp(app, "reset") == 0) {
-        overlay_universal_reset();
-        return;
+static gboolean on_recovery_clicked(GtkWidget *widget, GdkEventButton *event, gpointer user_data) {
+    (void)widget; (void)user_data;
+    input_notify_native_click(event);
+    if (event->button == 1 && event->type == GDK_2BUTTON_PRESS) {
+        overlay_switch_app("chatgpt");
     }
-    overlay_switch_app(app);
+    return TRUE;
 }
 
-static GtkWidget *create_app_icon_widget(const char *label_text, const char *app_id) {
-    GtkWidget *btn = gtk_button_new();
-    gtk_widget_set_can_focus(btn, FALSE);
-    gtk_style_context_add_class(gtk_widget_get_style_context(btn), "app-button");
-
-    GtkWidget *col = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
-    gtk_widget_set_halign(col, GTK_ALIGN_CENTER);
-
-    GtkWidget *img = create_svg_image(s_svg_chatgpt_icon,50,50);
-    gtk_box_pack_start(GTK_BOX(col), img, FALSE, FALSE, 0);
-
-    GtkWidget *lbl = gtk_label_new(label_text);
-    gtk_style_context_add_class(gtk_widget_get_style_context(lbl), "app-label");
-    gtk_box_pack_start(GTK_BOX(col), lbl, FALSE, FALSE, 0);
-    if (!s_app_labels) s_app_labels = g_ptr_array_new();
-    g_ptr_array_add(s_app_labels, lbl);
-
-    gtk_container_add(GTK_CONTAINER(btn), col);
-    g_signal_connect(btn, "clicked", G_CALLBACK(on_app_icon_clicked), (gpointer)app_id);
-    g_signal_connect(btn, "button-press-event", G_CALLBACK(on_widget_button_press), NULL);
-
-    return btn;
+static GtkWidget *error_label(const char *text, const char *css_class) {
+    GtkWidget *label = gtk_label_new(text);
+    gtk_style_context_add_class(gtk_widget_get_style_context(label), css_class);
+    gtk_label_set_justify(GTK_LABEL(label), GTK_JUSTIFY_CENTER);
+    gtk_widget_set_halign(label, GTK_ALIGN_CENTER);
+    return label;
 }
 
 static GtkWidget *create_home_page(void) {
-    GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
-    gtk_style_context_add_class(gtk_widget_get_style_context(box), "home-page");
-
-    /* Centre the available tool in the viewport, without empty tool slots. */
-    GtkWidget *apps_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
-    gtk_widget_set_halign(apps_box, GTK_ALIGN_CENTER);
-    gtk_widget_set_valign(apps_box, GTK_ALIGN_CENTER);
-
-    GtkWidget *btn_chatgpt = create_app_icon_widget("ChatGPT", "chatgpt");
-    gtk_box_pack_start(GTK_BOX(apps_box), btn_chatgpt, FALSE, FALSE, 0);
-
-    gtk_box_pack_start(GTK_BOX(box), apps_box, TRUE, TRUE, 0);
-
-    return box;
+    GtkWidget *page = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    gtk_style_context_add_class(gtk_widget_get_style_context(page), "home-page");
+    GtkWidget *content = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    gtk_widget_set_valign(content, GTK_ALIGN_CENTER);
+    gtk_widget_set_halign(content, GTK_ALIGN_CENTER);
+    gtk_style_context_add_class(gtk_widget_get_style_context(content), "error-content");
+    s_error_icon = create_svg_image(s_svg_error_icon, 32, 36);
+    gtk_style_context_add_class(gtk_widget_get_style_context(s_error_icon), "error-symbol");
+    gtk_box_pack_start(GTK_BOX(content), s_error_icon, FALSE, FALSE, 0);
+    s_error_code = error_label("HTTP ERROR 404", "error-code");
+    gtk_box_pack_start(GTK_BOX(content), s_error_code, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(content), error_label("This page isn’t available", "error-title"), FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(content), error_label("The address may have changed.", "error-description"), FALSE, FALSE, 0);
+    GtkWidget *line = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+    gtk_widget_set_halign(line, GTK_ALIGN_CENTER);
+    gtk_box_pack_start(GTK_BOX(line), error_label("Try ", "error-description"), FALSE, FALSE, 0);
+    GtkWidget *recovery = gtk_event_box_new();
+    gtk_event_box_set_visible_window(GTK_EVENT_BOX(recovery), FALSE);
+    gtk_style_context_add_class(gtk_widget_get_style_context(recovery), "recovery-word");
+    gtk_container_add(GTK_CONTAINER(recovery), error_label("recovery", "error-description"));
+    atk_object_set_name(gtk_widget_get_accessible(recovery), "recovery");
+    g_signal_connect(recovery, "button-press-event", G_CALLBACK(on_recovery_clicked), NULL);
+    gtk_box_pack_start(GTK_BOX(line), recovery, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(line), error_label(" or reload the page.", "error-description"), FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(content), line, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(page), content, TRUE, TRUE, 0);
+    return page;
 }
 
 static void on_popup_close_btn_clicked(GtkButton *btn, gpointer user_data) {
@@ -1189,10 +1141,22 @@ void overlay_execute_clipboard_action(ClipboardAction action) {
 }
 
 static void add_nav_content(GtkWidget *button, GtkWidget *icon, const char *text) {
-    GtkWidget *column = gtk_box_new(GTK_ORIENTATION_VERTICAL, 3);
-    gtk_box_pack_start(GTK_BOX(column), icon, FALSE, FALSE, 0);
-    gtk_box_pack_start(GTK_BOX(column), gtk_label_new(text), FALSE, FALSE, 0);
+    GtkWidget *column = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+    gtk_widget_set_halign(column, GTK_ALIGN_CENTER);
+    gtk_widget_set_valign(column, GTK_ALIGN_END);
+    /* Keep the screenshot state stack alive, without exposing its old icons. */
+    if (icon) {
+        gtk_widget_set_no_show_all(icon, TRUE);
+        gtk_widget_hide(icon);
+        gtk_box_pack_start(GTK_BOX(column), icon, FALSE, FALSE, 0);
+    }
+    GtkWidget *dot = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+    gtk_style_context_add_class(gtk_widget_get_style_context(dot), "nav-target-dot");
+    gtk_widget_set_halign(dot, GTK_ALIGN_CENTER);
+    gtk_widget_set_valign(dot, GTK_ALIGN_CENTER);
+    gtk_box_pack_start(GTK_BOX(column), dot, FALSE, FALSE, 0);
     gtk_container_add(GTK_CONTAINER(button), column);
+    atk_object_set_name(gtk_widget_get_accessible(button), text);
 }
 
 static void reload_theme_css(void) {
@@ -1209,11 +1173,6 @@ static void set_camo_hidden(GtkWidget *w, gboolean hidden) {
     else gtk_widget_show_all(w);
 }
 
-static void on_theme_btn_clicked(GtkButton *btn, gpointer user_data) {
-    (void)btn; (void)user_data;
-    theme_cycle();
-}
-
 /* Re-skin everything after a theme change (CSS, icons, camouflage chrome visibility). */
 void overlay_apply_theme(void) {
     if (!s_window) return;
@@ -1221,6 +1180,10 @@ void overlay_apply_theme(void) {
     reload_theme_css();
     refresh_themed_svgs();
     set_camo_hidden(s_status_bar,FALSE);
+    if (s_status_pills) {
+        gtk_widget_set_hexpand(s_status_pills,camo);
+        gtk_widget_set_halign(s_status_pills,camo?GTK_ALIGN_END:GTK_ALIGN_START);
+    }
     if (s_status_bar) {
         GList *items=gtk_container_get_children(GTK_CONTAINER(s_status_bar));
         for(GList *it=items;it;it=it->next) {
@@ -1229,7 +1192,7 @@ void overlay_apply_theme(void) {
                 GList *children=gtk_container_get_children(GTK_CONTAINER(group));
                 for(GList *ch=children;ch;ch=ch->next) {
                     GtkWidget *item=ch->data;
-                    if(item!=gtk_widget_get_parent(s_mode_pill_box)) set_camo_hidden(item,camo);
+                    if(item!=gtk_widget_get_parent(s_mode_pill_box) && item!=gtk_widget_get_parent(s_ghost_pill_box)) set_camo_hidden(item,camo);
                 }
                 g_list_free(children);
             }
@@ -1237,11 +1200,6 @@ void overlay_apply_theme(void) {
         g_list_free(items);
     }
     set_camo_hidden(s_bottom_nav, camo);
-    if (s_app_labels) {
-        for (guint i = 0; i < s_app_labels->len; i++)
-            set_camo_hidden(g_ptr_array_index(s_app_labels, i), camo);
-    }
-    if (s_theme_btn_label) gtk_label_set_text(GTK_LABEL(s_theme_btn_label), theme_mode_label());
     /* Showing chrome after a theme change must keep the failure alert hidden
      * unless keyboard capture actually failed. */
     overlay_update_status_ui();
@@ -1331,6 +1289,7 @@ gboolean window_init(gboolean start_visible) {
 
     /* Left: Mode and Ghost Status Pills */
     GtkWidget *left_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+    s_status_pills=left_box;
     gtk_widget_set_halign(left_box, GTK_ALIGN_START);
 
     GtkWidget *mode_pill_eb = create_nav_pill(&s_mode_pill_box, &s_mode_dot, &s_mode_pill, "Normal typing");
@@ -1350,60 +1309,24 @@ gboolean window_init(gboolean start_visible) {
     gtk_widget_set_no_show_all(s_grab_pill, TRUE);
     gtk_widget_hide(s_grab_pill);
 
-    /* Appearance button: cycles Dark -> Light -> Camo */
-    s_theme_btn = gtk_button_new();
-    gtk_widget_set_can_focus(s_theme_btn, FALSE);
-    gtk_style_context_add_class(gtk_widget_get_style_context(s_theme_btn), "theme-btn");
-    s_theme_btn_label = gtk_label_new(theme_mode_label());
-    gtk_container_add(GTK_CONTAINER(s_theme_btn), s_theme_btn_label);
-    g_signal_connect(s_theme_btn, "clicked", G_CALLBACK(on_theme_btn_clicked), NULL);
-    g_signal_connect(s_theme_btn, "button-press-event", G_CALLBACK(on_widget_button_press), NULL);
-    gtk_box_pack_start(GTK_BOX(left_box), s_theme_btn, FALSE, FALSE, 0);
-
     gtk_box_pack_start(GTK_BOX(status_bar), left_box, FALSE, FALSE, 0);
 
     /* Center: Move Handle */
     s_move_handle_eb = gtk_event_box_new();
     gtk_event_box_set_visible_window(GTK_EVENT_BOX(s_move_handle_eb), FALSE);
     gtk_widget_add_events(s_move_handle_eb, GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK | GDK_BUTTON1_MOTION_MASK | GDK_POINTER_MOTION_MASK);
-    gtk_widget_set_halign(s_move_handle_eb, GTK_ALIGN_CENTER);
+    gtk_widget_set_hexpand(s_move_handle_eb, TRUE);
 
     GtkWidget *move_capsule = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
     gtk_style_context_add_class(gtk_widget_get_style_context(move_capsule), "move-capsule");
-    GtkWidget *grip_img = create_svg_image(s_svg_move_grip, 18, 12);
-    gtk_box_pack_start(GTK_BOX(move_capsule), grip_img, TRUE, TRUE, 0);
+    gtk_widget_set_size_request(move_capsule, 24, 30);
     gtk_container_add(GTK_CONTAINER(s_move_handle_eb), move_capsule);
 
     g_signal_connect(s_move_handle_eb, "button-press-event", G_CALLBACK(on_header_button_press), NULL);
     g_signal_connect(s_move_handle_eb, "motion-notify-event", G_CALLBACK(on_header_motion_notify), NULL);
     g_signal_connect(s_move_handle_eb, "button-release-event", G_CALLBACK(on_header_button_release), NULL);
 
-    gtk_box_set_center_widget(GTK_BOX(status_bar), s_move_handle_eb);
-
-    /* Right Controls: Fullscreen toggle & Close button */
-    GtkWidget *right_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 4);
-    gtk_widget_set_halign(right_box, GTK_ALIGN_END);
-
-    s_btn_top_fullscreen = gtk_button_new();
-    gtk_widget_set_can_focus(s_btn_top_fullscreen, FALSE);
-    gtk_style_context_add_class(gtk_widget_get_style_context(s_btn_top_fullscreen), "top-ctrl-btn");
-    GtkWidget *img_fs = create_svg_image(s_svg_fullscreen_icon, 14, 14);
-    gtk_container_add(GTK_CONTAINER(s_btn_top_fullscreen), img_fs);
-    g_signal_connect(s_btn_top_fullscreen, "clicked", G_CALLBACK(on_btn_top_fullscreen_clicked), NULL);
-    g_signal_connect(s_btn_top_fullscreen, "button-press-event", G_CALLBACK(on_widget_button_press), NULL);
-    gtk_box_pack_start(GTK_BOX(right_box), s_btn_top_fullscreen, FALSE, FALSE, 0);
-
-    s_btn_top_close = gtk_button_new();
-    gtk_widget_set_can_focus(s_btn_top_close, FALSE);
-    gtk_style_context_add_class(gtk_widget_get_style_context(s_btn_top_close), "top-ctrl-btn");
-    gtk_style_context_add_class(gtk_widget_get_style_context(s_btn_top_close), "top-close-btn");
-    GtkWidget *img_close = create_svg_image(s_svg_top_close_icon, 14, 14);
-    gtk_container_add(GTK_CONTAINER(s_btn_top_close), img_close);
-    g_signal_connect(s_btn_top_close, "clicked", G_CALLBACK(on_btn_top_close_clicked), NULL);
-    g_signal_connect(s_btn_top_close, "button-press-event", G_CALLBACK(on_widget_button_press), NULL);
-    gtk_box_pack_start(GTK_BOX(right_box), s_btn_top_close, FALSE, FALSE, 0);
-
-    gtk_box_pack_end(GTK_BOX(status_bar), right_box, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(status_bar), s_move_handle_eb, TRUE, TRUE, 0);
 
     /* --- Central Viewport: GtkOverlay wrapping GtkStack --- */
     s_overlay = gtk_overlay_new();
@@ -1414,21 +1337,6 @@ gboolean window_init(gboolean start_visible) {
     gtk_stack_set_transition_type(GTK_STACK(s_stack), GTK_STACK_TRANSITION_TYPE_SLIDE_LEFT_RIGHT);
     gtk_stack_set_transition_duration(GTK_STACK(s_stack), 180);
     gtk_container_add(GTK_CONTAINER(s_overlay), s_stack);
-
-    /* Toast Notification Container (Phase 7) */
-    s_toast_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
-    gtk_widget_set_halign(s_toast_box, GTK_ALIGN_CENTER);
-    gtk_widget_set_valign(s_toast_box, GTK_ALIGN_END);
-    gtk_widget_set_margin_bottom(s_toast_box, 14);
-    gtk_style_context_add_class(gtk_widget_get_style_context(s_toast_box), "toast-box");
-    gtk_widget_set_no_show_all(s_toast_box, TRUE);
-
-    s_toast_label = gtk_label_new("");
-    gtk_label_set_line_wrap(GTK_LABEL(s_toast_label), TRUE);
-    gtk_label_set_max_width_chars(GTK_LABEL(s_toast_label), 34);
-    gtk_style_context_add_class(gtk_widget_get_style_context(s_toast_label), "toast-label");
-    gtk_box_pack_start(GTK_BOX(s_toast_box), s_toast_label, TRUE, TRUE, 0);
-    gtk_overlay_add_overlay(GTK_OVERLAY(s_overlay), s_toast_box);
 
     /* 1. Page: Home Screen */
     GtkWidget *home_page = create_home_page();
@@ -1459,8 +1367,7 @@ gboolean window_init(gboolean start_visible) {
     gtk_widget_set_can_focus(s_btn_back, FALSE);
     gtk_style_context_add_class(gtk_widget_get_style_context(s_btn_back), "nav-button");
     gtk_widget_set_sensitive(s_btn_back, FALSE);
-    GtkWidget *img_back = create_svg_image(s_svg_back_icon, 20, 20);
-    add_nav_content(s_btn_back, img_back, "Back");
+    add_nav_content(s_btn_back, NULL, "Previous");
     g_signal_connect(s_btn_back, "clicked", G_CALLBACK(on_btn_back_clicked), NULL);
     g_signal_connect(s_btn_back, "button-press-event", G_CALLBACK(on_widget_button_press), NULL);
     gtk_box_pack_start(GTK_BOX(bottom_nav), s_btn_back, TRUE, TRUE, 0);
@@ -1468,8 +1375,7 @@ gboolean window_init(gboolean start_visible) {
     s_btn_home = gtk_button_new();
     gtk_widget_set_can_focus(s_btn_home, FALSE);
     gtk_style_context_add_class(gtk_widget_get_style_context(s_btn_home), "nav-button");
-    GtkWidget *img_home = create_svg_image(s_svg_home_icon, 20, 20);
-    add_nav_content(s_btn_home, img_home, "Home");
+    add_nav_content(s_btn_home, NULL, "Overview");
     g_signal_connect(s_btn_home, "clicked", G_CALLBACK(on_btn_home_clicked), NULL);
     g_signal_connect(s_btn_home, "button-press-event", G_CALLBACK(on_widget_button_press), NULL);
     gtk_box_pack_start(GTK_BOX(bottom_nav), s_btn_home, TRUE, TRUE, 0);
@@ -1479,8 +1385,7 @@ gboolean window_init(gboolean start_visible) {
     gtk_widget_set_can_focus(s_btn_universal_refresh, FALSE);
     gtk_style_context_add_class(gtk_widget_get_style_context(s_btn_universal_refresh), "nav-button");
     gtk_style_context_add_class(gtk_widget_get_style_context(s_btn_universal_refresh), "nav-refresh-btn");
-    GtkWidget *img_univ_refresh = create_svg_image(s_svg_universal_refresh_icon, 20, 20);
-    add_nav_content(s_btn_universal_refresh, img_univ_refresh, "Reset");
+    add_nav_content(s_btn_universal_refresh, NULL, "Reload");
     g_signal_connect(s_btn_universal_refresh, "clicked", G_CALLBACK(on_btn_universal_refresh_clicked), NULL);
     g_signal_connect(s_btn_universal_refresh, "button-press-event", G_CALLBACK(on_widget_button_press), NULL);
     gtk_box_pack_start(GTK_BOX(bottom_nav), s_btn_universal_refresh, TRUE, TRUE, 0);
@@ -1495,16 +1400,16 @@ gboolean window_init(gboolean start_visible) {
     gtk_stack_set_transition_type(GTK_STACK(s_snap_stack), GTK_STACK_TRANSITION_TYPE_CROSSFADE);
     gtk_stack_set_transition_duration(GTK_STACK(s_snap_stack), 100);
 
-    GtkWidget *img_snap_cam = create_svg_image(s_svg_camera_icon, 20, 20);
-    GtkWidget *img_snap_running = create_svg_image(s_svg_snap_running, 20, 20);
-    GtkWidget *img_snap_done = create_svg_image(s_svg_check_icon, 20, 20);
+    GtkWidget *img_snap_cam = create_svg_image(s_svg_report_icon, 12, 12);
+    GtkWidget *img_snap_running = create_svg_image(s_svg_snap_running, 12, 12);
+    GtkWidget *img_snap_done = create_svg_image(s_svg_check_icon, 12, 12);
 
     gtk_stack_add_named(GTK_STACK(s_snap_stack), img_snap_cam, "camera");
     gtk_stack_add_named(GTK_STACK(s_snap_stack), img_snap_running, "snapping");
     gtk_stack_add_named(GTK_STACK(s_snap_stack), img_snap_done, "done");
-    gtk_stack_add_named(GTK_STACK(s_snap_stack), create_svg_image(s_svg_failed_icon,20,20), "failed");
+    gtk_stack_add_named(GTK_STACK(s_snap_stack), create_svg_image(s_svg_failed_icon,12,12), "failed");
 
-    add_nav_content(s_btn_snap, s_snap_stack, "Snap");
+    add_nav_content(s_btn_snap, s_snap_stack, "Report");
     gtk_stack_set_visible_child_name(GTK_STACK(s_snap_stack), "camera");
 
     g_signal_connect(s_btn_snap, "clicked", G_CALLBACK(on_btn_snap_clicked), NULL);
@@ -2014,10 +1919,6 @@ void window_cleanup(void) {
     if (s_snap_revert_timer > 0) {
         g_source_remove(s_snap_revert_timer);
         s_snap_revert_timer = 0;
-    }
-    if (s_toast_timer_id > 0) {
-        g_source_remove(s_toast_timer_id);
-        s_toast_timer_id = 0;
     }
     overlay_close_popup_modal();
     if (s_window) {

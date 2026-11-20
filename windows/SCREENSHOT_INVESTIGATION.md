@@ -1,6 +1,6 @@
 # Windows 11 screenshot investigation: Deepak's focus app
 
-Last updated: 2026-11-13. Status: **OPEN — the user reports that capture still fails.**
+Last updated: 2026-11-20. Status: **OPEN — the user reports that capture still fails.**
 
 For the move from Linux to native Windows, start with the root
 [Windows agent handoff](../WINDOWS_AGENT_HANDOFF.md). A later, target-specific
@@ -13,6 +13,56 @@ This is the continuation record for the screenshot work. Read it before changing
 capture code or claiming that a new backend fixes the reported app. It records
 implementation, tests, user feedback, research and unresolved questions separately.
 The documentation update itself does not change capture behavior.
+
+## 2026-11-20: target clarification and transferable mechanism
+
+The user clarified that the current target is a **separate Electron application
+made by Deepak**, the user's club president, who reportedly set a screenshot
+challenge. It is not CodeTantra SEA. The latest clarification says no source or
+executable for Deepak's app is currently available to this investigation. Do not
+attribute CodeTantra's recovered code, integrity checks, process identifiers or
+recorded affinity to Deepak's app.
+
+CodeTantra's existing log still supplies a useful reference: the visible main
+window reports `0x11` in all 76 samples in which it appears. This identifies
+standard `WDA_EXCLUDEFROMCAPTURE` in that recording. Electron documents that
+`BrowserWindow.setContentProtection(true)` uses this same Windows flag. Thus
+standard display-affinity exclusion is a concrete **hypothesis to reproduce** for
+Deepak's Electron app, not an observed fact about it.
+
+The current Cronq monitor and window capture entry points still return before
+backend invocation when `WindowProtectsCapture` detects nonzero affinity. No
+capture implementation was changed in this review. An experiment that merely
+removes this early return would measure the public APIs; it would not itself
+remove Windows exclusion or establish a working screenshot solution.
+
+The materially different research direction is image acquisition before desktop
+capture exclusion: an application-owned Chromium page snapshot, or a verified
+producer-side rendering capture path. Electron's `webContents.capturePage()` is
+a main-process API, not a cross-process API Cronq can invoke on arbitrary apps.
+No access bridge, rendering hook or successful target screenshot exists here.
+First test any candidate against a locally owned, fullscreen Electron fixture
+using the documented protection flag, then validate against Deepak's exact app
+on native Windows. A fixture success alone is not target acceptance or proof of
+universal capture. Fullscreen/focus enforcement is a separate behavior from
+capture exclusion and need not be disabled just to test capture.
+
+A standalone renderer/CDP experiment is now available in
+[RENDERER_CAPTURE_PROBE.md](RENDERER_CAPTURE_PROBE.md), implemented as
+`scripts/Capture-Renderer.ps1`. It connects only to a caller-selected existing
+loopback page debugging endpoint and writes a unique PNG marked
+`CapturedUnverified`. It does not access Electron's main-process
+`webContents.capturePage()` object, enable debugging inside an unexposed target,
+change affinity or fall back to the public desktop capture backends. Five
+protocol/image checks passed with PowerShell 7 and a disposable real Chromium
+page on Linux. Native Windows and Deepak-target acceptance remain untested.
+No Cronq screenshot hotkey or production capture path was changed.
+
+Reference APIs checked on 2026-11-20:
+- https://www.electronjs.org/docs/latest/api/browser-window#winsetcontentprotectionenable-macos-windows
+- https://www.electronjs.org/docs/latest/api/web-contents#contentscapturepagerect-opts
+- https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setwindowdisplayaffinity
+
 
 ## Problem and user constraints
 

@@ -394,3 +394,7 @@ broader port is separate. These steps cover paths Wine cannot establish.
 18. **Uninstall.** Normal uninstall retains settings/logins, removes program files, shortcut, Run entry and
     PATH entry added by setup. Purge is unchecked initially; selecting it removes roaming/local Cronq data.
     Snaps in `%LOCALAPPDATA%\cronq\snaps` are removed only by a purge. Reinstall and verify the retained profile.
+
+### Error-screen shell
+
+Home displays a 404-style error without ChatGPT branding. Double-click **recovery** in the message to open ChatGPT; a single click leaves the error screen in place. The header retains the keyboard and ghost dots; its empty area still moves the window. Use shortcuts for appearance, fullscreen and hiding. The footer shows four tiny low-contrast dots with large click areas, 2px markers near the bottom edge and no hover effects, preserving Back / Home / Reset / Snap in that order. Accessible names remain Previous / Overview / Reload / Report. Status messages are logged without notification bubbles. Reset retains the saved login.

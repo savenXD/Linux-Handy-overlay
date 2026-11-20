@@ -93,7 +93,32 @@ int main(int argc,char **argv) {
     key(XK_n,true);key(XK_n,false);
     printf("NORMAL observed: [%s]\n",gtk_entry_get_text(GTK_ENTRY(entry)));
     check("normal typing reaches external app",!strcmp(gtk_entry_get_text(GTK_ENTRY(entry)),"n"));
-    check("only one app tile",count_class(overlay_get_window_widget(),"app-button")==1);
+    check("error page replaces launcher",find_class(overlay_get_window_widget(),"error-title") && count_class(overlay_get_window_widget(),"app-button")==0);
+    check("only status dots remain in header",!find_class(overlay_get_window_widget(),"theme-btn") && !find_class(overlay_get_window_widget(),"top-ctrl-btn"));
+    overlay_show_toast("Fullscreen mode");
+    check("status actions create no notification bubble",!find_class(overlay_get_window_widget(),"toast-box"));
+    check("four footer actions retained",count_class(overlay_get_window_widget(),"nav-button")==4);
+    check("four footer click-zone markers",count_class(overlay_get_window_widget(),"nav-target-dot")==4);
+    GtkWidget *recovery=find_class(overlay_get_window_widget(),"recovery-word");
+    int ex=0,ey=0,rx=0,ry=0;
+    gdk_window_get_origin(gtk_widget_get_window(overlay_get_window_widget()),&ex,&ey);
+    gtk_widget_translate_coordinates(recovery,overlay_get_window_widget(),0,0,&rx,&ry);
+    XTestFakeMotionEvent(dpy,-1,ex+rx+12,ey+ry+5,CurrentTime);XFlush(dpy);pump(60);
+    XTestFakeButtonEvent(dpy,1,True,CurrentTime);XTestFakeButtonEvent(dpy,1,False,CurrentTime);XFlush(dpy);pump(80);
+    check("single recovery click keeps error page",!strcmp(overlay_get_current_app(),"home"));
+    pump(500);
+    for(int click=0;click<2;++click){XTestFakeButtonEvent(dpy,1,True,CurrentTime);XTestFakeButtonEvent(dpy,1,False,CurrentTime);XFlush(dpy);pump(70);}
+    check("double recovery click opens ChatGPT",!strcmp(overlay_get_current_app(),"chatgpt"));
+    check("recovery preserves desktop focus",focus()==original);
+    overlay_switch_app("home");pump(200);
+    for(int small=0;small<2;++small) {
+        overlay_set_size(small?260:360,small?180:280);pump(200);
+        int w,h;gtk_window_get_size(GTK_WINDOW(overlay_get_window_widget()),&w,&h);
+        check("error page fits requested size",w==(small?260:360)&&h==(small?180:280));
+        GdkPixbuf *preview=gdk_pixbuf_get_from_window(gtk_widget_get_window(overlay_get_window_widget()),0,0,w,h);
+        if(preview){char *path=g_build_filename(g_get_user_data_dir(),small?"error-home-small.png":"error-home-dark.png",NULL);gdk_pixbuf_save(preview,path,"png",NULL,NULL);g_free(path);g_object_unref(preview);}
+    }
+    overlay_set_size(360,280);pump(100);
     check("no old feature pages",!find_class(overlay_get_window_widget(),"ghost-page") && !find_class(overlay_get_window_widget(),"url-entry"));
     overlay_switch_app("chatgpt");
     WebKitWebView *view=chat_view_get_chatgpt_view();

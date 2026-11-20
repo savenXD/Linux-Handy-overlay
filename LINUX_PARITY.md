@@ -1,15 +1,15 @@
-# Linux / Windows parity — 1.4.1
+# Linux / Windows parity — 1.5.0
 
 Linux now follows the current Windows feature set, with the owner's explicit
 exclusions: no God-copy/God-paste, Alt+O or Alt+Shift+O. Windows native capture
 experiments remain Windows-only. Root `VERSION` and `windows/VERSION` both read
-`1.4.1`; generated defaults are identical.
+`1.5.0`; generated defaults are identical.
 
 ## Implemented changes
 
 | Area | Linux implementation | Verification |
 | --- | --- | --- |
-| Removed features | Standalone Browser, Ghost Typer/Writer, their pages/settings/commands and Alt+W removed. ChatGPT renderer retained as `chat_view.c`. Home keeps reserved empty slots. | Native widget tree and rejection of retired CLI/IPC/apps |
+| Removed features | Standalone Browser, Ghost Typer/Writer, their pages/settings/commands and Alt+W removed. ChatGPT renderer retained as `chat_view.c`. Home matches the Windows 404 shell, with double-click recovery entry and four low-contrast footer dots with full-sized click areas. | Native widget tree and rejection of retired CLI/IPC/apps |
 | Typing | Alt+M normal / overlay-only, gray / green glowing indicator; dedicated X11 keyboard grab, no mirror fallback, local DOM focus. | Real XTest typing into WebKitGTK: exact overlay text, empty underlying entry, unchanged XGetInputFocus, then normal app typing restored |
 | Failure/release behavior | Failed grab stays normal; lock, outside click, session lock, reset and click-through release routing. Hide preserves exclusive typing without an idle timeout. | Rival-client grab conflict, hide, lock/unlock, outside click, freedesktop lock signal and reset tested. Hidden text delivery, ghost opacity and kill-prompt Escape cancellation tested; suspend release source-reviewed |
 | Appearance | Same four palettes, Alt+C/T, live ChatGPT styling, indicator above content in all modes. | Real WebKit DOM computed colors and visible composer/indicator for all four modes; dark screenshot inspected |

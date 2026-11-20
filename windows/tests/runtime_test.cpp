@@ -84,6 +84,41 @@ int main(int argc, char** argv) {
         std::printf("%s  %s\n", ok ? "PASS" : "FAIL", name);
         if (!ok) ++failed;
     };
+    if(argc>1 && std::string(argv[1])=="--error-shell-fallback") {
+        Command("RESET");Command("SHOW");Pump(250);
+        RECT bounds{};GetWindowRect(overlay,&bounds);
+        const int dpi=GetDpiForWindow(overlay);
+        auto scale=[&](int v){return MulDiv(v,dpi,96);};
+        const int width=bounds.right-bounds.left, height=bounds.bottom-bounds.top;
+        HDC dc=GetDC(overlay);
+        HFONT font=CreateFontW(-scale(12),0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,DEFAULT_CHARSET,
+                               OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,DEFAULT_PITCH,L"Segoe UI");
+        auto old=SelectObject(dc,font);SIZE total{},prefix{},word{};
+        GetTextExtentPoint32W(dc,L"Try recovery or reload the page.",31,&total);
+        GetTextExtentPoint32W(dc,L"Try ",4,&prefix);
+        GetTextExtentPoint32W(dc,L"recovery",8,&word);
+        SelectObject(dc,old);DeleteObject(font);ReleaseDC(overlay,dc);
+        int y=scale(36)+(height-scale(46+36+143))/2+scale(46+23+34+19+9);
+        POINT recovery={bounds.left+(width-total.cx)/2+prefix.cx+word.cx/2,bounds.top+y};
+        INPUT click[2]{};click[0].type=INPUT_MOUSE;click[0].mi.dwFlags=MOUSEEVENTF_LEFTDOWN;
+        click[1]=click[0];click[1].mi.dwFlags=MOUSEEVENTF_LEFTUP;
+        SetCursorPos(recovery.x,recovery.y);SendInput(2,click,sizeof(INPUT));Pump(100);
+        check("native single click retains error screen",Command("STATUS").find("APP=home")!=std::string::npos);
+        Pump(GetDoubleClickTime()+50);
+        SendInput(2,click,sizeof(INPUT));Pump(60);SendInput(2,click,sizeof(INPUT));Pump(200);
+        check("native double-click word opens ChatGPT",Command("STATUS").find("APP=chatgpt")!=std::string::npos);
+        GetWindowRect(overlay,&bounds);
+        SetCursorPos(bounds.left+scale(12)+(bounds.right-bounds.left-scale(24))*3/8,bounds.bottom-scale(24));
+        SendInput(2,click,sizeof(INPUT));Pump(150);
+        check("native Overview returns to error screen",Command("STATUS").find("APP=home")!=std::string::npos);
+        Command("MODE overlay");Command("GHOST on");Command("GHOST off");Command("MODE overlay");
+        GetWindowRect(overlay,&bounds);
+        SetCursorPos(bounds.left+scale(12)+(bounds.right-bounds.left-scale(24))*5/8,bounds.bottom-scale(24));
+        SendInput(2,click,sizeof(INPUT));Pump(150);
+        check("native Reload retains reset route",Command("STATUS").find("MODE=NORMAL TARGET=NONE GHOST=SOLID")!=std::string::npos);
+        std::printf("error_shell_runtime_test: %d failure(s)\n",failed);
+        return failed?1:0;
+    }
     WNDCLASSW wc{};
     wc.lpfnWndProc = Receiver;
     wc.hInstance = GetModuleHandleW(nullptr);

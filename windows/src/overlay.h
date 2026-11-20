@@ -11,7 +11,7 @@ constexpr int kHeight = 640;
 constexpr int kMinWidth = 260;
 constexpr int kMinHeight = 180;
 constexpr int kCompactHeight = 280;
-constexpr int kCornerRadius = 24;
+constexpr int kCornerRadius = 10;
 
 bool Init(bool startVisible);
 void Cleanup();

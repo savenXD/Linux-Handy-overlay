@@ -90,10 +90,10 @@ make && make install
 
 ---
 
-## Features and shortcuts — 1.4.1
+## Features and shortcuts — 1.5.0
 
 Cronq contains Home and ChatGPT with a saved login. The standalone Browser and Ghost
-Typer are removed; Home shows a single centred ChatGPT launcher. Mouse click-through (Alt+G) stays.
+Typer are removed; Home looks like a compact “page unavailable” error. Double-click **recovery** in the message to open ChatGPT. Mouse click-through (Alt+G) stays.
 
 **Alt+M changes the typing destination.** Gray ball means your normal app receives
 text. Green glowing ball means only the overlay receives text. Your desktop app
@@ -126,8 +126,8 @@ Appearance switches the native UI and ChatGPT together. Modes are Dark, Light,
 Camouflage black text (default) and Camouflage white text. The typing ball remains
 visible in Camouflage. Drag the top handle to move, double-click it to maximize
 height, and drag the lower-right corner to resize. Home is compact; ChatGPT expands
-within the monitor work area. Home centres the ChatGPT tile without extra labels or placeholder slots. The
-bottom bar has four evenly spaced controls: Back, Home, Reset and Snap. Reset retains your login.
+within the monitor work area. Home shows a 404 message without ChatGPT branding. The header keeps only the keyboard and ghost dots; drag its empty area to move the window. Appearance, fullscreen and hide remain available through shortcuts.
+The footer has four tiny low-contrast dots with large click areas, 2px markers near the bottom edge and no hover effects. Left to right they run Back, Home, Reset and Snap; accessible names remain Previous, Overview, Reload and Report. Status messages no longer appear as bubbles. Reset retains your login.
 
 ```bash
 cronq                     # open / bring up

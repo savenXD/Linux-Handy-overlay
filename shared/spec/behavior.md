@@ -6,9 +6,9 @@ owner are listed explicitly below. Both VERSION files must match.
 
 ## Apps and typing
 
-Home has one centred ChatGPT tile, with no section label or empty tool slots. The former Browser/search
+Home is a “This page isn’t available” error screen, without ChatGPT branding. Only a primary-button double-click on the word “recovery” opens ChatGPT; a single click does nothing. The former Browser/search
 and Ghost Typer controls, modules, commands and configuration are removed. The
-bottom bar has four evenly sized controls: Back, Home, Reset, and Snap. Alt+W does nothing.
+bottom bar shows four tiny low-contrast dots with invisible full-sized click zones and 2px markers near the bottom edge without hover effects, retaining the Back, Home, Reset, and Snap routes in that order. Accessible names remain Previous, Overview, Reload, and Report. The header shows the keyboard and ghost dots plus an invisible drag area; appearance, fullscreen and hide remain keyboard actions. Alt+W does nothing.
 ChatGPT retains its existing per-user profile, cookies and related authentication
 popups. Back/reload apply to ChatGPT; Reset returns Home, normal typing and solid
 mouse interaction while retaining the login.
@@ -76,7 +76,7 @@ handle double-click height maximize/restore retain their platform implementation
 Default/docking use work area so the desktop panel remains accessible. Windows
 scales nominal dimensions by monitor DPI; GTK uses logical pixels and its display
 scale. Linux native rendering and font metrics are not pixel-identical to WebView2.
-Toasts last 2.2 seconds. Stay-on-top guard is bounded to 60 raises/s, burst 20,
+Status messages are logged without visual toast bubbles. Stay-on-top guard is bounded to 60 raises/s, burst 20,
 with a 3-second Linux cooldown (Windows also backs off persistent shell competition).
 
 ## Screenshot, persistence and recovery

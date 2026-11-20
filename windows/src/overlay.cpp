@@ -28,10 +28,8 @@ namespace {
 constexpr DWORD kAffinityExclude = 0x00000011;  // WDA_EXCLUDEFROMCAPTURE
 
 const wchar_t* const kClassName = L"CronqOverlayWindow";
-constexpr UINT_PTR kToastTimerId = 1;
 constexpr UINT_PTR kDragTimerId = 2;
 constexpr UINT_PTR kTypingHoverTimerId = 3;
-constexpr UINT kToastMs = 2200;
 
 HWND g_hwnd = nullptr;
 HINSTANCE g_inst = nullptr;
@@ -45,7 +43,6 @@ bool g_userMoved = false;
 bool g_maximized = false;
 int g_prevX = 0, g_prevY = 0, g_prevW = 0, g_prevH = 0;
 std::string g_app = "home";
-std::wstring g_toast;
 UINT g_msgTaskbarCreated = 0;
 
 int S(int v) { return MulDiv(v, (int)g_dpi, 96); }
@@ -199,20 +196,18 @@ void SetCompactMode(bool compact) {
 
 enum Hit {
     HitNone = 0,
-    HitHide,
-    HitFull,
-    HitClose,
     HitHandle,
     HitPillMode,
     HitPillGhost,
     HitGrip,
+    HitRecovery, HitPrevious, HitOverview, HitReload, HitReport,
     HitEdge,  // see edge mask
 };
 constexpr int kEdgeL = 1, kEdgeR = 2, kEdgeT = 4, kEdgeB = 8;
 
 struct Layout {
     int header;
-    RECT pillMode, pillGhost, btnHide, btnFull, btnClose, handleHit, handleDraw, grip;
+    RECT pillMode, pillGhost, handleHit, grip, footer[4];
 };
 
 RECT R(int l, int t, int r, int b) {
@@ -220,31 +215,16 @@ RECT R(int l, int t, int r, int b) {
     return rc;
 }
 
+RECT g_recoveryHit{};
 Layout MakeLayout(int w, int h) {
-    Layout lay;
-    lay.header = S(44);
-    lay.pillMode = R(S(10), S(10), S(10) + S(78), S(34));
-    lay.pillGhost = R(lay.pillMode.right + S(4), S(10), lay.pillMode.right + S(4) + S(60), S(34));
-    lay.btnClose = R(w - S(10) - S(26), S(8), w - S(10), S(36));
-    lay.btnFull = R(lay.btnClose.left - S(28), S(8), lay.btnClose.left - S(2), S(36));
-    lay.btnHide = R(0, 0, 0, 0);  // Linux has only fullscreen + close in the header (close hides)
-
-    int cx = w / 2;
-    int left = lay.pillGhost.right + S(4);
-    int right = lay.btnFull.left - S(4);
-    int hl = cx - S(40), hr = cx + S(40);
-    if (hl < left) hl = left;
-    if (hr > right) hr = right;
-    if (hr - hl < S(24)) {  // not enough room: no handle
-        hl = hr = cx;
-    }
-    lay.handleHit = R(hl, 0, hr, lay.header);
-    int dl = cx - S(24), dr = cx + S(24);
-    if (dl < hl) dl = hl;
-    if (dr > hr) dr = hr;
-    lay.handleDraw = (hr > hl) ? R(dl, S(18), dr, S(26)) : R(0, 0, 0, 0);
-
-    lay.grip = R(w - S(24), h - S(24), w, h);
+    Layout lay{};
+    lay.header = S(36);
+    lay.pillMode = R(S(12), S(4), S(36), S(32));
+    lay.pillGhost = R(S(40), S(4), S(64), S(32));
+    lay.handleHit = R(S(68), S(4), w-S(8), lay.header);
+    lay.grip = R(w-S(12),h-S(12),w,h);
+    const int col=(w-S(24))/4;
+    for(int i=0;i<4;++i) lay.footer[i]=R(S(12)+i*col,h-S(39),S(12)+(i+1)*col-S(4),h-S(3));
     return lay;
 }
 
@@ -255,20 +235,23 @@ int HitTest(int x, int y, int* edgeMask) {
     RECT rc;
     GetClientRect(g_hwnd, &rc);
     Layout lay = MakeLayout(rc.right, rc.bottom);
-    if (theme::IsCamouflage() && In(R(rc.right-S(34), S(6), rc.right-S(14), S(26)),x,y))
-        return HitPillMode;
+    if (theme::IsCamouflage()) {
+        if (In(R(rc.right-S(64), S(4), rc.right-S(40), S(32)),x,y)) return HitPillMode;
+        if (In(R(rc.right-S(36), S(4), rc.right-S(12), S(32)),x,y)) return HitPillGhost;
+    }
 
-    if (In(lay.btnClose, x, y)) return HitClose;
-    if (In(lay.btnFull, x, y)) return HitFull;
-    if (In(lay.btnHide, x, y)) return HitHide;
+    if (!theme::IsCamouflage()) {
     if (In(lay.pillMode, x, y)) return HitPillMode;
     if (In(lay.pillGhost, x, y)) return HitPillGhost;
     if (In(lay.handleHit, x, y)) return HitHandle;
+    if (g_app=="home" && In(g_recoveryHit,x,y)) return HitRecovery;
+    for(int i=0;i<4;++i) if(In(lay.footer[i],x,y)) return HitPrevious+i;
     if (In(lay.grip, x, y)) {
         *edgeMask = kEdgeR | kEdgeB;
         return HitGrip;
     }
 
+    }
     int border = S(8);
     int mask = 0;
     if (x <= border)
@@ -292,7 +275,6 @@ COLORREF kBg = RGB(16, 18, 26);
 COLORREF kHeaderBg = RGB(24, 27, 38);
 COLORREF kText = RGB(232, 234, 242);
 COLORREF kMuted = RGB(140, 146, 165);
-COLORREF kPillOutline = RGB(52, 57, 76);
 
 void FillRound(HDC dc, const RECT& r, int radius, COLORREF fill) {
     HBRUSH br = CreateSolidBrush(fill);
@@ -327,17 +309,6 @@ void Text(HDC dc, HFONT font, const std::wstring& s, RECT r, COLORREF c, UINT fl
     SelectObject(dc, old);
 }
 
-void DrawPill(HDC dc, HFONT font, const RECT& r, const wchar_t* label, COLORREF dot) {
-    FillRound(dc, r, (r.bottom - r.top) / 2, kPillOutline);
-    RECT inner = R(r.left + 1, r.top + 1, r.right - 1, r.bottom - 1);
-    FillRound(dc, inner, (inner.bottom - inner.top) / 2, RGB(30, 34, 48));
-    int d = S(7), cy = (r.top + r.bottom) / 2;
-    RECT dotRect = R(r.left + S(8), cy - d / 2, r.left + S(8) + d, cy + d / 2);
-    FillRound(dc, dotRect, d / 2, dot);
-    RECT t = R(dotRect.right + S(5), r.top, r.right - S(4), r.bottom);
-    Text(dc, font, label, t, kText, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
-}
-
 void Paint(HDC wndDc) {
     if (theme::IsCamouflage()) {
         RECT rc; GetClientRect(g_hwnd,&rc);
@@ -346,10 +317,13 @@ void Paint(HDC wndDc) {
         if (!chat_view::IsUiVisible()) {
             const bool typing = input::GetTypingTarget() == input::TypingTarget::Overlay &&
                                 input::GetGrabStatus() == input::GrabStatus::Active;
-            const int cx = rc.right - S(24), cy = S(16), d = S(10);
+            const int cx = rc.right - S(52), cy = S(18), d = S(7);
             if (typing) FillRound(wndDc, R(cx-d,cy-d,cx+d,cy+d), d, RGB(20,100,50));
-            FillRound(wndDc, R(cx-d/2,cy-d/2,cx+d/2,cy+d/2), d/2,
+            FillRound(wndDc, R(cx-d/2,cy-d/2,cx+(d+1)/2,cy+(d+1)/2), d/2,
                       typing ? RGB(34,197,94) : RGB(115,115,115));
+            const int gx=rc.right-S(24);
+            FillRound(wndDc,R(gx-d/2,cy-d/2,gx+(d+1)/2,cy+(d+1)/2),d/2,
+                      input::GetGhostMode()==input::GhostMode::On ? RGB(168,85,247) : RGB(115,115,115));
         }
         return;
     }
@@ -367,7 +341,7 @@ void Paint(HDC wndDc) {
     // Background + header
     const auto& palette=theme::Get();
     auto color=[](theme_logic::Color c) { return RGB(c.r,c.g,c.b); };
-    kBg=color(palette.background); kHeaderBg=color(palette.surface);
+    kBg=color(palette.background); kHeaderBg=color(palette.background);
     kText=color(palette.text); kMuted=color(palette.muted);
     HBRUSH bg = CreateSolidBrush(kBg);
     FillRect(dc, &rc, bg);
@@ -379,105 +353,57 @@ void Paint(HDC wndDc) {
     DeleteObject(hb);
 
     HFONT fSmall = MakeFont(11, FW_SEMIBOLD);
-    HFONT fBody = MakeFont(13, FW_NORMAL);
-    HFONT fTitle = MakeFont(20, FW_BOLD);
+    HFONT fBody = MakeFont(12, FW_NORMAL);
+    HFONT fTitle = MakeFont(w<S(290)?17:20, FW_SEMIBOLD);
 
-    // Status pills
-    bool typing = input::GetTypingTarget() == input::TypingTarget::Overlay &&
-                  input::GetGrabStatus() == input::GrabStatus::Active;
-    bool ghost = input::GetGhostMode() == input::GhostMode::On;
-    DrawPill(dc, fSmall, lay.pillMode, typing ? L"Overlay typing" : L"Normal typing",
-             typing ? RGB(34, 197, 94) : RGB(115, 115, 115));
-    DrawPill(dc, fSmall, lay.pillGhost, ghost ? L"Ghost" : L"Solid",
-             ghost ? RGB(160, 110, 240) : RGB(120, 128, 150));
-
-    // Centre drag handle
-    if (lay.handleDraw.right > lay.handleDraw.left) {
-        FillRound(dc, lay.handleDraw, (lay.handleDraw.bottom - lay.handleDraw.top) / 2, RGB(48, 53, 72));
+    // Match the HTML shell when WebView2 is unavailable; never expose a debug panel.
+    const bool typing = input::GetTypingTarget()==input::TypingTarget::Overlay &&
+                        input::GetGrabStatus()==input::GrabStatus::Active;
+    const bool ghost = input::GetGhostMode()==input::GhostMode::On;
+    for(int i=0;i<2;++i) {
+        const RECT& pill=i ? lay.pillGhost : lay.pillMode;
+        int cx=(pill.left+pill.right)/2, cy=(pill.top+pill.bottom)/2, d=S(7);
+        COLORREF dot=i ? (ghost ? RGB(168,85,247) : RGB(115,115,115))
+                       : (typing ? RGB(34,197,94) : RGB(115,115,115));
+        FillRound(dc,R(cx-d/2,cy-d/2,cx+(d+1)/2,cy+(d+1)/2),d/2,dot);
     }
-
-    // Window buttons drawn with lines (no dependency on glyph coverage of the font).
-    int lw = S(2) > 1 ? S(2) : 1;
-    {
-        const RECT& b = lay.btnFull;  // fullscreen: square outline
-        int cx = (b.left + b.right) / 2, cy = (b.top + b.bottom) / 2, d = S(6);
-        Line(dc, cx - d, cy - d, cx + d, cy - d, kMuted, lw);
-        Line(dc, cx + d, cy - d, cx + d, cy + d, kMuted, lw);
-        Line(dc, cx + d, cy + d, cx - d, cy + d, kMuted, lw);
-        Line(dc, cx - d, cy + d, cx - d, cy - d, kMuted, lw);
+    const int bodyBottom=h-S(46);
+    const bool compact=h<=S(240);
+    int y=lay.header+std::max(S(6),(bodyBottom-lay.header-S(compact?85:143))/2);
+    if(!compact) {
+        int cx=w/2;
+        Line(dc,cx-S(12),y,cx+S(4),y,kMuted,1);
+        Line(dc,cx-S(12),y,cx-S(12),y+S(32),kMuted,1);
+        Line(dc,cx-S(12),y+S(32),cx+S(12),y+S(32),kMuted,1);
+        Line(dc,cx+S(12),y+S(10),cx+S(12),y+S(32),kMuted,1);
+        Line(dc,cx+S(4),y,cx+S(12),y+S(10),kMuted,1);
+        Line(dc,cx-S(5),y+S(24),cx,y+S(21),kMuted,1);
+        Line(dc,cx,y+S(21),cx+S(5),y+S(24),kMuted,1);
+        y+=S(46);
     }
-    {
-        const RECT& b = lay.btnClose;  // close: X
-        int cx = (b.left + b.right) / 2, cy = (b.top + b.bottom) / 2, d = S(6);
-        Line(dc, cx - d, cy - d, cx + d, cy + d, kMuted, lw);
-        Line(dc, cx + d, cy - d, cx - d, cy + d, kMuted, lw);
-    }
-
-    // Body
-    const AppConfig& cfg = config::Get();
-    int y = lay.header + S(10);
-    RECT titleRect = R(S(16), y, w - S(16), y + S(28));
-    Text(dc, fTitle, L"Cronq", titleRect, kText, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
-    y += S(32);
-
-    wchar_t status[160];
-    swprintf(status, sizeof(status) / sizeof(status[0]), L"%ls  ·  %ls  ·  %d%%  ·  %dx%d",
-             typing ? L"Overlay typing" : L"Normal typing", ghost ? L"Ghost" : L"Solid", (int)(g_opacity * 100.0 + 0.5), w,
-             h);
-    RECT statusRect = R(S(16), y, w - S(16), y + S(20));
-    Text(dc, fBody, status, statusRect, kMuted, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
-    y += S(30);
-
-    auto up = [](char c) { return (wchar_t)((c >= 'a' && c <= 'z') ? c - 'a' + 'A' : c); };
-    struct Row {
-        std::wstring left, right;
-    };
-    Row rows[4];
-    rows[0].left = std::wstring(L"Alt+") + up(cfg.toggleKey) + L"  Show / hide";
-    rows[0].right = std::wstring(L"Alt+") + up(cfg.ghostKey) + L"  Ghost mode";
-    rows[1].left = L"Alt+A / S  Opacity";
-    rows[1].right = L"Alt+F  Fullscreen";
-    rows[2].left = L"Alt+D  Default size";
-    rows[2].right = std::wstring(L"Alt+") + up(cfg.modeKey) + L"  Typing target";
-    rows[3].left = std::wstring(L"Alt+") + up(cfg.snapKey) + L"  Snap";
-    int colW = (w - S(32)) / 2;
-    for (int i = 0; i < 4; i++) {
-        if (y + S(20) > h - S(24)) break;  // compact window: only what fits
-        RECT a = R(S(16), y, S(16) + colW - S(4), y + S(20));
-        RECT b = R(S(16) + colW, y, w - S(16), y + S(20));
-        Text(dc, fBody, rows[i].left, a, kText, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
-        Text(dc, fBody, rows[i].right, b, kText, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
-        y += S(22);
-    }
-
-    if (!chat_view::FailureReason().empty()) {
-        RECT error = R(S(16), lay.header + S(46), w - S(16), h - S(14));
-        HBRUSH brush = CreateSolidBrush(kBg);
-        FillRect(dc, &error, brush);
-        DeleteObject(brush);
-        Text(dc, fBody, Widen(chat_view::FailureReason()), error, kMuted, DT_LEFT | DT_WORDBREAK);
-    }
-
-    // Resize grip (inside the rounded corner)
-    {
-        int base = S(12);
-        for (int k = 1; k <= 3; k++) {
-            int d = S(5) * k;
-            Line(dc, w - base - d, h - base, w - base, h - base - d, RGB(90, 96, 120), 1);
-        }
-    }
-
-    // Toast
-    if (!g_toast.empty()) {
-        RECT m = R(0, 0, w - S(40), 0);
-        HGDIOBJ old = SelectObject(dc, fBody);
-        DrawTextW(dc, g_toast.c_str(), (int)g_toast.size(), &m, DT_CALCRECT | DT_SINGLELINE | DT_NOPREFIX);
-        SelectObject(dc, old);
-        int tw = m.right - m.left + S(28), th = m.bottom - m.top + S(14);
-        int tx = (w - tw) / 2, ty = h - S(48) - th;
-        RECT box = R(tx, ty, tx + tw, ty + th);
-        FillRound(dc, box, th / 2, RGB(44, 49, 70));
-        Text(dc, fBody, g_toast, box, kText, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    Text(dc,fSmall,L"HTTP ERROR 404",R(S(12),y,w-S(12),y+S(15)),kMuted,DT_CENTER|DT_SINGLELINE);
+    y+=S(23);
+    Text(dc,fTitle,L"This page isn’t available",R(S(10),y,w-S(10),y+S(26)),kText,DT_CENTER|DT_SINGLELINE|DT_END_ELLIPSIS);
+    y+=S(34);
+    Text(dc,fBody,L"The address may have changed.",R(S(8),y,w-S(8),y+S(18)),kMuted,DT_CENTER|DT_SINGLELINE);
+    y+=S(19);
+    const wchar_t* line=L"Try recovery or reload the page.";
+    Text(dc,fBody,line,R(S(8),y,w-S(8),y+S(18)),kMuted,DT_CENTER|DT_SINGLELINE);
+    HGDIOBJ oldFont=SelectObject(dc,fBody);
+    SIZE total{},prefix{},word{};
+    GetTextExtentPoint32W(dc,line,(int)wcslen(line),&total);
+    GetTextExtentPoint32W(dc,L"Try ",4,&prefix);
+    GetTextExtentPoint32W(dc,L"recovery",8,&word);
+    SelectObject(dc,oldFont);
+    int left=(w-total.cx)/2+prefix.cx;
+    g_recoveryHit=R(left,y,left+word.cx,y+S(18));
+    for(int i=0;i<4;++i) {
+        const RECT& r=lay.footer[i];
+        const bool enabled=i!=0||g_app!="home";
+        const int cx=(r.left+r.right)/2, cy=h-S(7), d=S(2);
+        int gray=palette.light?184:71;
+        if(!enabled) gray=palette.light?225:25;
+        FillRound(dc,R(cx-d/2,cy-d/2,cx+(d+1)/2,cy+(d+1)/2),d/2,RGB(gray,gray,gray));
     }
 
     DeleteObject(fSmall);
@@ -583,13 +509,12 @@ void OnLButtonUp(int x, int y) {
     int edges = 0;
     if (HitTest(x, y, &edges) != pressed) return;  // released somewhere else: cancel
     switch (pressed) {
-        case HitHide:
-        case HitClose:
-            Hide();
+        case HitPrevious:
+            if(g_app!="home") Back();
             break;
-        case HitFull:
-            SetFullscreen();
-            break;
+        case HitOverview: SwitchApp("home"); break;
+        case HitReload: UniversalReset(); break;
+        case HitReport: snap::Run(); break;
         case HitPillMode:
             input::ToggleTypingTarget();
             break;
@@ -612,8 +537,8 @@ bool OnSetCursor() {
     LPCWSTR cur = IDC_ARROW;
     if (hit == HitHandle) {
         cur = IDC_SIZEALL;
-    } else if (hit == HitHide || hit == HitFull || hit == HitClose || hit == HitPillMode ||
-               hit == HitPillGhost) {
+    } else if (hit == HitPillMode ||
+               hit == HitPillGhost || (hit>=HitRecovery && hit<=HitReport)) {
         cur = IDC_HAND;
     } else if (hit == HitGrip || hit == HitEdge) {
         bool l = edges & kEdgeL, r = edges & kEdgeR, t = edges & kEdgeT, b = edges & kEdgeB;
@@ -659,7 +584,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             return 0;
         case WM_LBUTTONDBLCLK: {
             int x = (short)LOWORD(lp), y = (short)HIWORD(lp), edges = 0;
-            if (HitTest(x, y, &edges) == HitHandle) {
+            const int hit=HitTest(x,y,&edges);
+            if(hit==HitRecovery && g_app=="home") {
+                g_pressHit=HitNone; SwitchApp("chatgpt");
+            } else if (hit == HitHandle) {
                 g_pressHit = HitNone;
                 ToggleMaximizedHeight();
             } else {
@@ -691,12 +619,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                     g_drag = DragNone;
                 } else
                     OnMouseMove();
-                return 0;
-            }
-            if (wp == kToastTimerId) {
-                KillTimer(hwnd, kToastTimerId);
-                g_toast.clear();
-                QueueDraw();
                 return 0;
             }
             if (wp == snap::kSnapCaptureTimerId) {
@@ -896,7 +818,6 @@ void Cleanup() {
         WTSUnRegisterSessionNotification(g_hwnd);
         KillTimer(g_hwnd, kTypingHoverTimerId);
         KillTimer(g_hwnd, kDragTimerId);
-        KillTimer(g_hwnd, kToastTimerId);
     }
     raise::Stop();
     if (g_hwnd) {
@@ -1105,15 +1026,8 @@ void QueueDraw() {
 }
 
 void ShowToast(const std::string& msg) {
-    if (!g_hwnd) return;
-    if (ui::IsReady()) {
-        ui::PostToUi("{\"type\":\"toast\",\"text\":\"" + json::Escape(msg) + "\"}");
-        ui::PushState();
-        return;
-    }
-    g_toast = Widen(msg);
-    SetTimer(g_hwnd, kToastTimerId, kToastMs, nullptr);  // re-arms if already running
-    QueueDraw();
+    // Preserve diagnostics without visual status bubbles in either renderer.
+    Log("STATUS", "%s", msg.c_str());
 }
 
 void SwitchApp(const std::string& name) {

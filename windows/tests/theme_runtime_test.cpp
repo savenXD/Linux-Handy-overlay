@@ -54,12 +54,12 @@ int main(int argc, char**) {
             check("site receives preferred color scheme",Eval(kChat,light?L"matchMedia('(prefers-color-scheme: light)').matches":L"matchMedia('(prefers-color-scheme: dark)').matches")=="true");
             check("ChatGPT palette applied",Eval(kChat,L"getComputedStyle(document.documentElement).getPropertyValue('--bg-primary').trim()") == "\""+theme_logic::Hex(theme::Get().background)+"\"");
             check("typing indicator remains visible in every appearance",Eval(kUi,L"getComputedStyle(document.querySelector('.status-bar')).display!=='none'&&getComputedStyle(document.getElementById('mode')).display!=='none'")=="true");
-            check("other Cronq controls hidden only in camouflage",Eval(kUi,L"getComputedStyle(document.getElementById('appearance')).display==='none'") == (mode>=2 ? "true" : "false"));
+            check("header contains only status and drag surface",Eval(kUi,L"!document.getElementById('appearance')&&!document.querySelector('[data-window]')&&document.querySelectorAll('.status-bar button').length===3")=="true");
             check("ChatGPT controls hidden only in camouflage",Eval(kChat,L"getComputedStyle(document.querySelector('header')).display==='none'&&getComputedStyle(document.querySelector('aside')).display==='none'&&getComputedStyle(document.querySelector('article button')).display==='none'") == (mode>=2 ? "true" : "false"));
             check("essential ChatGPT text and composer stay visible",Eval(kChat,L"getComputedStyle(document.querySelector('article p')).display!=='none'&&getComputedStyle(document.querySelector('textarea')).display!=='none'&&getComputedStyle(document.querySelector('[data-testid=send-button]')).display!=='none'")=="true");
             if(mode>=2){
                 check("camouflage is borderless",Eval(kUi,L"getComputedStyle(document.querySelector('.phone-root')).borderTopWidth")=="\"0px\"");
-                check("home shows icons only",Eval(kUi,L"getComputedStyle(document.querySelector('.app-label')).display==='none'&&document.querySelector('.home-search-bar')===null")=="true");
+                check("home shows error message without branding",Eval(kUi,L"!document.querySelector('.app-button')&&!!document.getElementById('recovery')")=="true");
                 check("ChatGPT background is transparent",Eval(kChat,L"getComputedStyle(document.body).backgroundColor")=="\"rgba(0, 0, 0, 0)\"");
                 check("page wrapper backgrounds removed",Eval(kChat,L"getComputedStyle(document.getElementById('root')).backgroundImage")=="\"none\"");
                 check("camouflage text color follows Light/Dark",Eval(kChat,L"getComputedStyle(document.querySelector('article p')).color")== (mode==2 ? "\"rgb(0, 0, 0)\"" : "\"rgb(255, 255, 255)\""));
@@ -74,8 +74,11 @@ int main(int argc, char**) {
         Eval(kChat,L"window.__cronqBeforeReload=true");
         g.views[kChat].core->Reload();
         check("ChatGPT navigation preserves camouflage",Wait([]{return Eval(kChat,L"typeof window.__cronqBeforeReload==='undefined'&&document.title==='Theme fixture'&&!!document.getElementById('cronq-appearance')")=="true";}));
-        Eval(kUi,L"document.getElementById('appearance').click()"); // Camo -> Dark via the actual native bridge.
-        check("appearance button reaches host",Wait([]{return theme::Mode()==0;}));
+        overlay::SwitchApp("home");
+        Eval(kUi,L"document.getElementById('recovery').click()");
+        check("single click preserves error screen",std::string(overlay::CurrentApp())=="home");
+        Eval(kUi,L"document.getElementById('recovery').dispatchEvent(new MouseEvent('dblclick',{bubbles:true,button:0}))");
+        check("double-click word reaches native host",Wait([]{return std::string(overlay::CurrentApp())=="chatgpt";}));
         // Test actual desktop composition, not just CSS or controller flags.
         overlay::SwitchApp("chatgpt");
         theme::SetMode(2);
