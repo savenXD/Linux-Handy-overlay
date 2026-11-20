@@ -1,6 +1,6 @@
 #include "window.h"
 #include "hotkey.h"
-#include "browser.h"
+#include "chat_view.h"
 #include "config.h"
 #include "input.h"
 #include "raise.h"
@@ -37,17 +37,6 @@ static const char *s_svg_home_icon =
     "<polyline points=\"9 22 9 12 15 12 15 22\"/>"
     "</svg>";
 
-static const char *s_svg_ghost_idle =
-    "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#e4e4e7\" stroke-width=\"2.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\">"
-    "<path d=\"M9 10h.01M15 10h.01M12 2a8 8 0 0 0-8 8v10l3-2 3 2 2-2 2 2 3-2 3 2V10a8 8 0 0 0-8-8z\"/>"
-    "</svg>";
-
-static const char *s_svg_ghost_typing =
-    "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#38bdf8\" stroke-width=\"2.6\" stroke-linecap=\"round\">"
-    "<circle cx=\"12\" cy=\"12\" r=\"9\" stroke-dasharray=\"28\" stroke-dashoffset=\"10\"/>"
-    "<circle cx=\"12\" cy=\"12\" r=\"2.5\" fill=\"#38bdf8\"/>"
-    "</svg>";
-
 static const char *s_svg_check_icon =
     "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#22c55e\" stroke-width=\"2.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\">"
     "<polyline points=\"20 6 9 17 4 12\"/>"
@@ -70,24 +59,6 @@ static const char *s_svg_snap_running =
     "<circle cx=\"12\" cy=\"12\" r=\"9\" stroke-dasharray=\"28\" stroke-dashoffset=\"10\"/>"
     "</svg>";
 
-static const char *s_svg_reload_icon =
-    "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#a1a1aa\" stroke-width=\"2.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\">"
-    "<polyline points=\"23 4 23 10 17 10\"/>"
-    "<path d=\"M20.49 15a9 9 0 1 1-2.12-9.36L23 10\"/>"
-    "</svg>";
-
-static const char *s_svg_stop_icon =
-    "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#a1a1aa\" stroke-width=\"2.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\">"
-    "<line x1=\"18\" y1=\"6\" x2=\"6\" y2=\"18\"/>"
-    "<line x1=\"6\" y1=\"6\" x2=\"18\" y2=\"18\"/>"
-    "</svg>";
-
-static const char *s_svg_search_icon =
-    "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#71717a\" stroke-width=\"2.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\">"
-    "<circle cx=\"11\" cy=\"11\" r=\"8\"/>"
-    "<line x1=\"21\" y1=\"21\" x2=\"16.65\" y2=\"16.65\"/>"
-    "</svg>";
-
 static const char *s_svg_close_icon =
     "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#ef4444\" stroke-width=\"2.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\">"
     "<line x1=\"18\" y1=\"6\" x2=\"6\" y2=\"18\"/>"
@@ -96,8 +67,8 @@ static const char *s_svg_close_icon =
 
 static const char *s_svg_universal_refresh_icon =
     "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#ffffff\" stroke-width=\"2.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\">"
-    "<path d=\"M21.5 2v6h-6\"/>"
-    "<path d=\"M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67\"/>"
+    "<path d=\"M20 4v5h-5\"/>"
+    "<path d=\"M20 9a8 8 0 1 0 .2 5\"/>"
     "</svg>";
 
 static const char *s_svg_chatgpt_icon =
@@ -107,24 +78,6 @@ static const char *s_svg_chatgpt_icon =
     "<path fill=\"#ffffff\" d=\"M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9897 5.9897 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1683a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4947zm-9.66-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1402-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1683a.0757.0757 0 0 1-.071 0l-4.8303-2.7866A4.504 4.504 0 0 1 2.3408 7.8956zm16.0993 3.8558L12.5973 8.3829l2.02-1.1636a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.4023-.682zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1635a.0804.0804 0 0 1-.038-.0567V6.0748a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.4598a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.6069 1.4997-2.602-1.4997z\"/>"
     "</g>"
     "</svg>";
-
-static const char *s_svg_ghost_app =
-    "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"64\" height=\"64\" viewBox=\"0 0 64 64\">"
-    "<rect x=\"1\" y=\"1\" width=\"62\" height=\"62\" rx=\"17\" fill=\"#1f1f1f\" stroke=\"#2a2a2a\"/>"
-    "<g transform=\"translate(16 15) scale(1.35)\" fill=\"none\" stroke=\"#ffffff\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\">"
-    "<path d=\"M4 21V10a8 8 0 0 1 16 0v11l-3-2-2 2-3-2-3 2-2-2z\"/><path d=\"M9 10v2m6-2v2\"/>"
-    "</g></svg>";
-
-static const char *s_svg_browser_icon =
-    "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"64\" height=\"64\" viewBox=\"0 0 64 64\">"
-    "<rect x=\"1\" y=\"1\" width=\"62\" height=\"62\" rx=\"17\" fill=\"#f5f6f8\"/>"
-    "<g transform=\"translate(10 10)\">"
-    "<circle cx=\"22\" cy=\"22\" r=\"21\" fill=\"#34a853\"/>"
-    "<path d=\"M22 1a21 21 0 0 1 18.2 10.5H22a10.5 10.5 0 0 0-9.1 15.75L3.8 11.5A21 21 0 0 1 22 1\" fill=\"#ea4335\"/>"
-    "<path d=\"M40.2 11.5A21 21 0 0 1 22 43l9.1-15.75A10.5 10.5 0 0 0 22 11.5\" fill=\"#fbbc05\"/>"
-    "<circle cx=\"22\" cy=\"22\" r=\"10.5\" fill=\"#f1f3f4\"/>"
-    "<circle cx=\"22\" cy=\"22\" r=\"8.5\" fill=\"#4285f4\"/>"
-    "</g></svg>";
 
 static const char *s_svg_move_grip =
     "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"8\" viewBox=\"0 0 24 8\" fill=\"none\">"
@@ -176,7 +129,7 @@ static void on_svg_image_finalized(gpointer data, GObject *where_the_object_was)
 /* App-tile icons keep their own colours in every theme; UI-chrome icons follow the theme. */
 static GtkWidget *create_svg_image(const char *svg_str, int width, int height) {
     if (!svg_str) return gtk_label_new("");
-    gboolean themed = !(svg_str == s_svg_chatgpt_icon || svg_str == s_svg_ghost_app || svg_str == s_svg_browser_icon);
+    gboolean themed = !(svg_str == s_svg_chatgpt_icon);
     GdkPixbuf *pb = render_svg_pixbuf(svg_str, width, height, themed);
     if (!pb) return gtk_label_new("");
     GtkWidget *img = gtk_image_new_from_pixbuf(pb);
@@ -206,9 +159,6 @@ static void refresh_themed_svgs(void) {
 static GtkCssProvider *s_css_provider = NULL;
 static GtkWidget *s_status_bar = NULL;
 static GtkWidget *s_bottom_nav = NULL;
-static GtkWidget *s_home_search_eb = NULL;
-static GtkWidget *s_home_sec_lbl = NULL;
-static GtkWidget *s_home_apps_box = NULL;
 static GtkWidget *s_theme_btn = NULL;
 static GtkWidget *s_theme_btn_label = NULL;
 static GPtrArray *s_app_labels = NULL;
@@ -222,19 +172,6 @@ static GtkWidget *s_window = NULL;
 static GtkWidget *s_root_box = NULL;
 static GtkWidget *s_overlay = NULL;
 static GtkWidget *s_stack = NULL;
-
-static GtkWidget *s_url_entry = NULL;
-static GtkWidget *s_progress_bar = NULL;
-static GtkWidget *s_header_box = NULL;
-
-static GtkWidget *s_test_entry = NULL;
-static GtkWidget *s_ghost_start, *s_ghost_status, *s_ghost_controls, *s_ghost_eta;
-static guint s_ghost_eta_timer = 0;
-static GtkWidget *s_ghost_human, *s_ghost_safe, *s_ghost_modes[3], *s_ghost_mode_row;
-static GtkWidget *s_ghost_count, *s_ghost_placeholder;
-static guint s_ghost_countdown = 0;
-static int s_ghost_seconds = 0;
-static char *s_ghost_text_cache = NULL;
 
 static GtkWidget *s_mode_pill_box = NULL;
 static GtkWidget *s_mode_dot = NULL;
@@ -253,13 +190,8 @@ static GtkWidget *s_btn_top_fullscreen = NULL;
 static GtkWidget *s_btn_top_close = NULL;
 
 static GtkWidget *s_btn_back = NULL;
-static GtkWidget *s_btn_reload = NULL;
-static GtkWidget *s_reload_stack = NULL;
 static GtkWidget *s_btn_home = NULL;
 static GtkWidget *s_btn_universal_refresh = NULL;
-static GtkWidget *s_btn_ghost = NULL;
-static GtkWidget *s_btn_ghost_stack = NULL;
-static guint      s_ghost_revert_timer = 0;
 static GtkWidget *s_btn_snap = NULL;
 static GtkWidget *s_snap_stack = NULL;
 
@@ -272,7 +204,7 @@ static GtkWidget *s_popup_child_view = NULL;
 
 static Window     s_xid = None;
 static gboolean   s_visible = FALSE;
-static guint      s_clock_timer_id = 0;
+
 static int        s_pos_x = 0;
 static int        s_pos_y = 0;
 static int        s_win_width = OVERLAY_WIDTH;
@@ -316,8 +248,8 @@ static const char *s_phone_css =
     /* ---- status balls: colour only, meaning is in the tooltip ---- */
     ".nav-pill { background: transparent; border: none; border-radius: 999px; padding: 6px 5px; }"
     ".nav-pill-dot { min-width: 9px; min-height: 9px; border-radius: 999px; background-color: #737373; }"
-    ".nav-pill.pill-mirror .nav-pill-dot, .nav-pill.pill-solid .nav-pill-dot { background-color: #737373; }"
-    ".nav-pill.pill-excl .nav-pill-dot { background-color: #fde68a; }"
+    ".nav-pill.pill-normal .nav-pill-dot, .nav-pill.pill-solid .nav-pill-dot { background-color: #737373; }"
+    ".nav-pill.pill-overlay .nav-pill-dot { background-color: #22c55e; box-shadow: 0 0 5px #22c55e, 0 0 12px rgba(34,197,94,0.65); }"
     ".nav-pill.pill-ghost .nav-pill-dot { background-color: #a855f7; }"
     ".nav-pill.pill-grab-alert .nav-pill-dot { background-color: #ef4444; }"
     /* ---- window controls ---- */
@@ -331,38 +263,21 @@ static const char *s_phone_css =
     ".theme-btn:hover { background-color: #1f1f1f; }"
     ".resize-grip { opacity: 0.4; padding: 2px; }"
     ".resize-grip:hover { opacity: 1.0; }"
-    /* ---- browser header ---- */
-    ".header-box { padding: 6px 10px 8px; background-color: #000000; border-bottom: 1px solid #1a1a1a; }"
-    ".url-bar-container { background-color: #121212; border: 1px solid #262626; border-radius: 8px; padding: 1px 4px 1px 10px; }"
-    ".url-bar-container:focus-within { border-color: #ffffff; }"
-    ".url-leading-icon { opacity: 0.5; }"
-    ".url-entry { background-color: transparent; color: #ffffff; border: none; box-shadow: none; padding: 5px 6px; font-size: 12px; caret-color: #ffffff; }"
-    ".url-entry:focus { background-color: transparent; border: none; box-shadow: none; }"
-    ".url-action-btn { background: transparent; background-image: none; box-shadow: none; border: none; padding: 4px 6px; border-radius: 6px; }"
-    ".url-action-btn:hover { background-color: #222222; }"
-    ".load-progress, .load-progress trough { min-height: 2px; padding: 0; margin: 0; background: transparent; border: none; }"
-    ".load-progress progress { min-height: 2px; border: none; border-radius: 0; background-color: #ffffff; }"
+    /* ---- retained shell ---- */
     /* ---- home ---- */
     ".home-page { background-color: #000000; }"
-    ".home-search-bar { background-color: #121212; border: 1px solid #262626; border-radius: 8px; padding: 9px 12px; }"
-    ".home-search-bar:hover { border-color: #525252; }"
-    ".home-search-label { font-size: 12px; color: #737373; }"
-    ".home-section-title { font-size: 9px; font-weight: 600; color: #666666; letter-spacing: 1px; }"
-    ".app-button { background: transparent; background-image: none; box-shadow: none; border: none; padding: 8px 6px; margin: 0; border-radius: 10px; }"
+    ".app-button { background: transparent; background-image: none; box-shadow: none; border: none; padding: 12px 18px; margin: 0; border-radius: 14px; }"
     ".app-button:hover { background-color: #161616; }"
     ".app-button:active { background-color: #222222; }"
-    ".app-label { font-size: 11px; font-weight: 400; color: #e5e5e5; margin-top: 5px; }"
+    ".app-label { font-size: 12px; font-weight: 500; color: #e5e5e5; margin-top: 8px; }"
     /* ---- bottom bar ---- */
-    ".test-input-box { padding: 4px 10px; background-color: #000000; border-top: 1px solid #1a1a1a; }"
-    ".test-input-entry { background-color: #121212; color: #ffffff; border: 1px solid #262626; border-radius: 8px; padding: 5px 10px; font-size: 11px; caret-color: #ffffff; box-shadow: none; }"
-    ".test-input-entry:focus { border-color: #ffffff; }"
-    ".bottom-nav { background-color: #000000; padding: 5px 10px 7px; border-top: 1px solid #1a1a1a; border-radius: 0 0 21px 21px; }"
-    ".nav-button { background: transparent; background-image: none; box-shadow: none; border: none; padding: 5px 4px; min-height: 34px; min-width: 0; border-radius: 8px; }"
-    ".nav-button label { font-size: 9px; color: #737373; }"
+    ".bottom-nav { background-color: #000000; padding: 6px 12px 8px; border-top: 1px solid #1a1a1a; border-radius: 0 0 21px 21px; }"
+    ".nav-button { background: transparent; background-image: none; box-shadow: none; border: none; padding: 6px 4px; min-height: 34px; min-width: 0; border-radius: 10px; }"
+    ".nav-button label { font-size: 10px; color: #a0a0a0; }"
     ".nav-button:hover { background-color: #161616; }"
     ".nav-button:hover label { color: #d4d4d4; }"
     ".nav-button:active { background-color: #222222; }"
-    ".nav-button:disabled { opacity: 0.3; }"
+    ".nav-button:disabled { opacity: 0.45; }"
     ".nav-button.nav-selected { background-color: #1c1c1c; }"
     ".nav-button.nav-selected label { color: #ffffff; font-weight: 600; }"
     ".nav-refresh-btn { background: transparent; }"
@@ -373,59 +288,18 @@ static const char *s_phone_css =
     ".popup-modal-bar { padding: 7px 12px; background-color: #0a0a0a; border-bottom: 1px solid #1a1a1a; }"
     ".popup-modal-title { color: #ffffff; font-size: 12px; font-weight: 600; }"
     ".popup-close-btn { background: transparent; border: none; padding: 4px 8px; border-radius: 6px; }"
-    ".popup-close-btn:hover { background-color: #ef4444; }"
-    /* ---- ghost writer ---- */
-    ".ghost-page { background-color: #000000; color: #e5e5e5; }"
-    ".ghost-page label { color: #a0a0a0; font-size: 11px; }"
-    ".ghost-page .ghost-title { color: #ffffff; font-size: 20px; font-weight: 600; }"
-    ".ghost-page .section-label { color: #737373; font-size: 9px; font-weight: 600; letter-spacing: 1px; }"
-    ".ghost-page .editor-frame { background-color: #0c0c0c; border: 1px solid #222222; border-radius: 8px; }"
-    ".ghost-page scrolledwindow { border-radius: 8px; }"
-    ".ghost-page textview, .ghost-page textview text { background-color: transparent; color: #ffffff; font-size: 12px; caret-color: #ffffff; }"
-    ".ghost-page textview text selection { background-color: #ffffff; color: #000000; }"
-    ".ghost-page .eta { color: #a0a0a0; font-size: 10px; border: 1px solid #333333; border-radius: 6px; padding: 1px 7px; background: none; }"
-    ".ghost-page .dim-label { color: #737373; font-size: 10px; }"
-    ".ghost-page scrolledwindow, .ghost-page viewport { background-color: transparent; }"
-    ".ghost-page .mode-btn { background-color: #121212; background-image: none; box-shadow: none; color: #a0a0a0; border: 1px solid #262626; border-radius: 8px; padding: 7px 4px; }"
-    ".ghost-page .mode-btn label { color: #a0a0a0; font-size: 11px; }"
-    ".ghost-page .mode-btn:hover { background-color: #1a1a1a; }"
-    ".ghost-page .mode-btn:checked { background-color: #262626; border-color: #525252; }"
-    ".ghost-page .mode-btn:checked label { color: #ffffff; font-weight: 600; }"
-    ".ghost-page switch { background-color: #262626; background-image: none; border: none; border-radius: 999px; box-shadow: none; min-width: 38px; min-height: 20px; }"
-    ".ghost-page switch:checked { background-color: #22c55e; }"
-    ".ghost-page switch slider { background-color: #ffffff; background-image: none; border: none; border-radius: 999px; min-width: 16px; min-height: 16px; margin: 2px; box-shadow: none; }"
-    ".ghost-page .editor-hint { color: #666666; font-family: monospace; font-size: 12px; }"
-    ".ghost-page button { background-color: #121212; background-image: none; box-shadow: none; text-shadow: none; color: #e5e5e5; border: 1px solid #262626; border-radius: 8px; padding: 6px 10px; }"
-    ".ghost-page button:hover { background-color: #1c1c1c; border-color: #404040; }"
-    ".ghost-page button:active { background-color: #262626; }"
-    ".ghost-page .quiet-button { background: transparent; border-color: transparent; padding: 3px 6px; }"
-    ".ghost-page .quiet-button label { color: #a0a0a0; font-size: 10px; }"
-    ".ghost-page .start-typing, .ghost-page button.suggested-action { background-color: #ffffff; background-image: none; border: 1px solid #ffffff; border-radius: 8px; padding: 10px; box-shadow: none; }"
-    ".ghost-page .start-typing:hover, .ghost-page button.suggested-action:hover { background-color: #d4d4d4; border-color: #d4d4d4; }"
-    ".ghost-page .start-typing label, .ghost-page button.suggested-action label { color: #000000; font-size: 12px; font-weight: 600; }"
-    ".ghost-page spinbutton { background-color: #121212; color: #e5e5e5; border: 1px solid #262626; border-radius: 6px; box-shadow: none; font-size: 11px; min-height: 30px; }"
-    ".ghost-page spinbutton button { background: transparent; border: none; padding: 1px; min-width: 11px; }"
-    ".ghost-page spinbutton entry { color: #e5e5e5; min-width: 28px; padding: 2px; }"
-    ".ghost-page check { background-color: #121212; border: 1px solid #525252; border-radius: 4px; box-shadow: none; }"
-    ".ghost-page check:checked { background-color: #ffffff; background-image: none; color: #000000; border-color: #ffffff; }"
-    ".ghost-page expander { padding: 8px 0; }"
-    ".ghost-page expander arrow { color: #a0a0a0; }"
-    ".ghost-page scrollbar trough { background: transparent; }"
-    ".ghost-page scrollbar slider { background-color: #333333; min-width: 4px; border: none; border-radius: 4px; }"
-    ".ghost-page scrollbar slider:hover { background-color: #525252; }";
+    ".popup-close-btn:hover { background-color: #ef4444; }";
 
 static void update_x11_state_properties(void) {
     if (s_xid == None) return;
     Display *xdpy = gdk_x11_display_get_xdisplay(gdk_display_get_default());
     Atom prop_state = XInternAtom(xdpy, "_CRONQ_STATE", False);
-    Atom prop_text = XInternAtom(xdpy, "_CRONQ_ENTRY_TEXT", False);
-    Atom prop_url = XInternAtom(xdpy, "_CRONQ_URL_TEXT", False);
     Atom prop_app = XInternAtom(xdpy, "_CRONQ_APP", False);
     Atom utf8_string = XInternAtom(xdpy, "UTF8_STRING", False);
 
     char state_str[128];
     snprintf(state_str, sizeof(state_str), "MODE=%s TARGET=%s GHOST=%s GRAB=%s APP=%s",
-             input_get_key_mode() == KEY_MODE_EXCLUSIVE ? "EXCLUSIVE" : "MIRROR",
+             input_get_typing_target() == TYPING_TARGET_OVERLAY ? "OVERLAY" : "NORMAL",
              input_get_typing_target() == TYPING_TARGET_OVERLAY ? "OVERLAY" : "NONE",
              input_get_ghost_mode() == GHOST_MODE_ON ? "GHOST" : "SOLID",
              input_get_grab_status() == GRAB_STATUS_ACTIVE ? "ACTIVE" :
@@ -434,14 +308,6 @@ static void update_x11_state_properties(void) {
 
     XChangeProperty(xdpy, s_xid, prop_state, utf8_string, 8, PropModeReplace,
                     (unsigned char *)state_str, strlen(state_str));
-
-    const char *text = overlay_get_entry_text();
-    XChangeProperty(xdpy, s_xid, prop_text, utf8_string, 8, PropModeReplace,
-                    (unsigned char *)text, strlen(text));
-
-    const char *url = s_url_entry ? gtk_entry_get_text(GTK_ENTRY(s_url_entry)) : "";
-    XChangeProperty(xdpy, s_xid, prop_url, utf8_string, 8, PropModeReplace,
-                    (unsigned char *)url, strlen(url));
 
     XChangeProperty(xdpy, s_xid, prop_app, utf8_string, 8, PropModeReplace,
                     (unsigned char *)s_current_app, strlen(s_current_app));
@@ -452,20 +318,14 @@ void overlay_update_status_ui(void) {
 
     /* 1. Mode Pill */
     if (s_mode_pill_box && s_mode_pill) {
-        KeyMode mode = input_get_key_mode();
+        gboolean typing = input_get_typing_target()==TYPING_TARGET_OVERLAY && input_get_grab_status()==GRAB_STATUS_ACTIVE;
         GtkStyleContext *sc = gtk_widget_get_style_context(s_mode_pill_box);
-        gtk_style_context_remove_class(sc, "pill-mirror");
-        gtk_style_context_remove_class(sc, "pill-excl");
-
-        if (mode == KEY_MODE_EXCLUSIVE) {
-            gtk_label_set_text(GTK_LABEL(s_mode_pill), "Exclusive");
-            gtk_style_context_add_class(sc, "pill-excl");
-            gtk_widget_set_tooltip_text(gtk_widget_get_parent(s_mode_pill_box), "Exclusive (click for Mirror)");
-        } else {
-            gtk_label_set_text(GTK_LABEL(s_mode_pill), "Mirror");
-            gtk_style_context_add_class(sc, "pill-mirror");
-            gtk_widget_set_tooltip_text(gtk_widget_get_parent(s_mode_pill_box), "Mirror (click for Exclusive)");
-        }
+        gtk_style_context_remove_class(sc,"pill-normal");
+        gtk_style_context_remove_class(sc,"pill-overlay");
+        gtk_style_context_add_class(sc,typing?"pill-overlay":"pill-normal");
+        gtk_label_set_text(GTK_LABEL(s_mode_pill),typing?"Overlay typing":"Normal typing");
+        atk_object_set_name(gtk_widget_get_accessible(gtk_widget_get_parent(s_mode_pill_box)),
+                            typing?"Typing: overlay":"Typing: normal app");
     }
 
     /* 2. Ghost Mode Pill */
@@ -478,11 +338,9 @@ void overlay_update_status_ui(void) {
         if (ghost == GHOST_MODE_ON) {
             gtk_label_set_text(GTK_LABEL(s_ghost_pill_label), "Ghost");
             gtk_style_context_add_class(sc, "pill-ghost");
-            gtk_widget_set_tooltip_text(gtk_widget_get_parent(s_ghost_pill_box), "Ghost (click for Solid)");
         } else {
             gtk_label_set_text(GTK_LABEL(s_ghost_pill_label), "Solid");
             gtk_style_context_add_class(sc, "pill-solid");
-            gtk_widget_set_tooltip_text(gtk_widget_get_parent(s_ghost_pill_box), "Solid (click for Ghost)");
         }
     }
 
@@ -496,13 +354,10 @@ void overlay_update_status_ui(void) {
         }
     }
 
-    if (s_btn_home && s_btn_ghost) {
-        GtkStyleContext *home = gtk_widget_get_style_context(s_btn_home);
-        GtkStyleContext *ghost = gtk_widget_get_style_context(s_btn_ghost);
-        gtk_style_context_remove_class(home, "nav-selected");
-        gtk_style_context_remove_class(ghost, "nav-selected");
-        if (strcmp(s_current_app, "home") == 0) gtk_style_context_add_class(home, "nav-selected");
-        if (strcmp(s_current_app, "ghost") == 0) gtk_style_context_add_class(ghost, "nav-selected");
+    if (s_btn_home) {
+        GtkStyleContext *sc=gtk_widget_get_style_context(s_btn_home);
+        if (!strcmp(s_current_app,"home")) gtk_style_context_add_class(sc,"nav-selected");
+        else gtk_style_context_remove_class(sc,"nav-selected");
     }
     /* Update Back button sensitivity */
     if (s_btn_back) {
@@ -516,38 +371,38 @@ void overlay_update_status_ui(void) {
     update_x11_state_properties();
 }
 
-static gboolean on_clock_tick(gpointer user_data) {
-    (void)user_data;
-    if (s_visible) {
-        overlay_update_status_ui();
+static GdkMonitor *current_monitor(void) {
+    GdkDisplay *display = gdk_display_get_default();
+    if (!display) return NULL;
+    GdkMonitor *mon = s_user_moved ? gdk_display_get_monitor_at_point(display,
+        s_pos_x + s_win_width/2, s_pos_y + s_win_height/2) : NULL;
+    const AppConfig *cfg = config_get();
+    if (!mon && g_ascii_strcasecmp(cfg->monitor,"primary")) {
+        int n=atoi(cfg->monitor);
+        if(n>=0 && n<gdk_display_get_n_monitors(display)) mon=gdk_display_get_monitor(display,n);
     }
-    return G_SOURCE_CONTINUE;
+    if(!mon) mon=gdk_display_get_primary_monitor(display);
+    if(!mon && gdk_display_get_n_monitors(display)) mon=gdk_display_get_monitor(display,0);
+    return mon;
+}
+
+static void fitted_size(int *width, int *height) {
+    const AppConfig *cfg=config_get();
+    GdkRectangle work={0,0,1920,1080};
+    GdkMonitor *mon=current_monitor();
+    if(mon) gdk_monitor_get_workarea(mon,&work);
+    int aw=MAX(1,work.width-2*cfg->margin), ah=MAX(1,work.height-2*cfg->margin);
+    double scale=MIN(1.0,MIN((double)aw/cfg->width,(double)(ah*3/4)/cfg->height));
+    *width=MAX(OVERLAY_MIN_WIDTH,(int)(cfg->width*scale));
+    *height=MAX(OVERLAY_MIN_HEIGHT,(int)(cfg->height*scale));
 }
 
 static void calculate_monitor_position(int *out_x, int *out_y) {
     const AppConfig *cfg = config_get();
-    GdkDisplay *display = gdk_display_get_default();
-    GdkMonitor *mon = NULL;
-
-    if (g_ascii_strcasecmp(cfg->monitor, "primary") == 0) {
-        mon = gdk_display_get_primary_monitor(display);
-    } else {
-        int idx = atoi(cfg->monitor);
-        int n_mon = gdk_display_get_n_monitors(display);
-        if (idx >= 0 && idx < n_mon) {
-            mon = gdk_display_get_monitor(display, idx);
-        }
-    }
-    if (!mon) {
-        mon = gdk_display_get_primary_monitor(display);
-        if (!mon && gdk_display_get_n_monitors(display) > 0) {
-            mon = gdk_display_get_monitor(display, 0);
-        }
-    }
-
+    GdkMonitor *mon = current_monitor();
     GdkRectangle geom = {0, 0, 1920, 1080};
     if (mon) {
-        gdk_monitor_get_geometry(mon, &geom);
+        gdk_monitor_get_workarea(mon, &geom);
     }
 
     int w = (s_win_width > 0) ? s_win_width : cfg->width;
@@ -618,8 +473,7 @@ void overlay_set_opacity(double opacity) {
 }
 
 static void get_monitor_bounds(int *out_w, int *out_h) {
-    GdkDisplay *display = gdk_display_get_default();
-    GdkMonitor *mon = display ? gdk_display_get_primary_monitor(display) : NULL;
+    GdkMonitor *mon = current_monitor();
     GdkRectangle geom = {0, 0, 1920, 1080};
     if (mon) {
         gdk_monitor_get_geometry(mon, &geom);
@@ -671,8 +525,7 @@ void overlay_set_size(int width, int height) {
 void overlay_set_fullscreen(void) {
     if (!s_window) return;
     int mon_x = 0, mon_y = 0, mon_w = 1920, mon_h = 1080;
-    GdkDisplay *display = gdk_display_get_default();
-    GdkMonitor *mon = display ? gdk_display_get_primary_monitor(display) : NULL;
+    GdkMonitor *mon = current_monitor();
     GdkRectangle geom = {0, 0, 1920, 1080};
     if (mon) {
         gdk_monitor_get_geometry(mon, &geom);
@@ -709,23 +562,24 @@ void overlay_set_fullscreen(void) {
 
 void overlay_set_default_size(void) {
     if (!s_window) return;
-    const AppConfig *cfg = config_get();
-    int def_w = (cfg && cfg->width > 0) ? cfg->width : OVERLAY_WIDTH;
-    int def_h = (cfg && cfg->height > 0) ? cfg->height : OVERLAY_HEIGHT;
-
+    int def_w,def_h;
+    fitted_size(&def_w,&def_h);
+    if(!strcmp(s_current_app,"home")) def_h=MIN(OVERLAY_COMPACT_HEIGHT,def_h);
     s_user_moved = FALSE;
+    overlay_set_size(def_w, def_h);
     calculate_monitor_position(&s_pos_x, &s_pos_y);
     gtk_window_move(GTK_WINDOW(s_window), s_pos_x, s_pos_y);
-    overlay_set_size(def_w, def_h);
     s_is_maximized = FALSE;
-    overlay_show_toast("Default size (360x640)");
+    overlay_show_toast("Default size");
 }
 
 void overlay_set_compact_mode(gboolean compact) {
     if (!s_window) return;
     if (s_is_maximized) return;
 
-    int target_h = compact ? OVERLAY_COMPACT_HEIGHT : OVERLAY_EXPANDED_HEIGHT;
+    int fitted_w, fitted_h;
+    fitted_size(&fitted_w,&fitted_h);
+    int target_h = compact ? MIN(OVERLAY_COMPACT_HEIGHT,fitted_h) : fitted_h;
     if (s_win_height == target_h) return;
 
     int old_h = s_win_height;
@@ -997,86 +851,19 @@ static gboolean on_widget_button_press(GtkWidget *widget, GdkEventButton *event,
     return FALSE;
 }
 
-static void on_url_entry_activate(GtkEntry *entry, gpointer user_data) {
-    (void)user_data;
-    const char *text = gtk_entry_get_text(entry);
-    if (text && text[0] != '\0') {
-        browser_load_in_browser(text);
-        gtk_widget_grab_focus(GTK_WIDGET(browser_get_browser_view()));
-    }
-}
-
-static void on_test_entry_changed(GtkTextBuffer *editable, gpointer user_data) {
-    (void)user_data;
-    int count = gtk_text_buffer_get_char_count(editable);
-    if (s_ghost_count) {
-        char text[96];
-        int lines = gtk_text_buffer_get_line_count(editable);
-        g_snprintf(text, sizeof(text), "%d chars · %d line%s", count, lines, lines == 1 ? "" : "s");
-        gtk_label_set_text(GTK_LABEL(s_ghost_count), text);
-    }
-    if (s_ghost_placeholder) gtk_widget_set_visible(s_ghost_placeholder, count == 0);
-    update_x11_state_properties();
-}
-
-static void on_browser_uri_changed(const char *uri, gpointer user_data) {
-    (void)user_data;
-    if (s_url_entry && !gtk_widget_has_focus(s_url_entry)) {
-        gtk_entry_set_text(GTK_ENTRY(s_url_entry), uri);
-    }
-    update_x11_state_properties();
-}
-
-static void on_browser_progress_changed(double progress, gpointer user_data) {
-    (void)user_data;
-    if (s_progress_bar) {
-        if (progress >= 1.0 || progress <= 0.0) {
-            gtk_widget_set_visible(s_progress_bar, FALSE);
-            gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(s_progress_bar), 0.0);
-        } else {
-            gtk_widget_set_visible(s_progress_bar, TRUE);
-            gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(s_progress_bar), progress);
-        }
-    }
-}
-
-static void on_browser_state_changed(bool is_loading, bool can_back, bool can_forward, gpointer user_data) {
-    (void)user_data;
-    (void)can_back;
-    (void)can_forward;
-    if (s_reload_stack) {
-        gtk_stack_set_visible_child_name(GTK_STACK(s_reload_stack), is_loading ? "stop" : "reload");
-    }
-}
-
-static void on_browser_clicked(gpointer user_data) {
-    (void)user_data;
-    input_notify_native_click(NULL);
-}
-
 void overlay_switch_app(const char *app_name) {
     if (!s_stack || !app_name) return;
 
     if (g_ascii_strcasecmp(app_name, "chatgpt") == 0) {
         gtk_stack_set_visible_child_name(GTK_STACK(s_stack), "chatgpt");
         g_strlcpy(s_current_app, "chatgpt", sizeof(s_current_app));
-        browser_set_active_view("chatgpt");
+        chat_view_set_active_view("chatgpt");
         overlay_set_compact_mode(FALSE);
         xutil_log("WINDOW", "Switched view to ChatGPT app.");
-    } else if (g_ascii_strcasecmp(app_name, "browser") == 0) {
-        gtk_stack_set_visible_child_name(GTK_STACK(s_stack), "browser");
-        g_strlcpy(s_current_app, "browser", sizeof(s_current_app));
-        browser_set_active_view("browser");
-        overlay_set_compact_mode(FALSE);
-        xutil_log("WINDOW", "Switched view to Browser app.");
-    } else if (g_ascii_strcasecmp(app_name, "ghost") == 0) {
-        gtk_stack_set_visible_child_name(GTK_STACK(s_stack), "ghost");
-        g_strlcpy(s_current_app, "ghost", sizeof(s_current_app));
-        overlay_set_compact_mode(FALSE);
     } else {
         gtk_stack_set_visible_child_name(GTK_STACK(s_stack), "home");
         g_strlcpy(s_current_app, "home", sizeof(s_current_app));
-        browser_set_active_view("browser");
+        chat_view_set_active_view("home");
         overlay_set_compact_mode(TRUE);
         xutil_log("WINDOW", "Switched view to Home screen.");
     }
@@ -1092,39 +879,10 @@ void overlay_go_home(void) {
 }
 
 void overlay_back(void) {
-    if (strcmp(s_current_app, "chatgpt") == 0) {
-        WebKitWebView *cg_view = browser_get_chatgpt_view();
-        if (cg_view && webkit_web_view_can_go_back(cg_view)) {
-            webkit_web_view_go_back(cg_view);
-        } else {
-            overlay_go_home();
-        }
-    } else if (strcmp(s_current_app, "browser") == 0) {
-        WebKitWebView *br_view = browser_get_browser_view();
-        if (br_view && webkit_web_view_can_go_back(br_view)) {
-            webkit_web_view_go_back(br_view);
-        } else {
-            overlay_go_home();
-        }
-    } else {
-        overlay_go_home();
-    }
+    if (!strcmp(s_current_app,"chatgpt") && chat_view_can_go_back()) chat_view_go_back();
+    else overlay_go_home();
 }
-
-void overlay_reload(void) {
-    if (strcmp(s_current_app, "chatgpt") == 0) {
-        WebKitWebView *cg_view = browser_get_chatgpt_view();
-        if (cg_view) {
-            if (webkit_web_view_is_loading(cg_view)) webkit_web_view_stop_loading(cg_view);
-            else webkit_web_view_reload(cg_view);
-        }
-    } else if (strcmp(s_current_app, "browser") == 0) {
-        if (browser_is_loading()) browser_stop();
-        else browser_reload();
-    } else {
-        if (s_window) gtk_widget_queue_draw(s_window);
-    }
-}
+void overlay_reload(void) { if (!strcmp(s_current_app,"chatgpt")) chat_view_reload(); }
 
 void overlay_universal_reset(void) {
     xutil_log("WINDOW", "Triggering Universal Reset (returning to factory-fresh state)...");
@@ -1132,28 +890,16 @@ void overlay_universal_reset(void) {
     /* 1. Close any open popup modals */
     overlay_close_popup_modal();
 
-    /* 2. Clear and hide test/ghost input entry and URL bar */
-    if (s_test_entry) {
-        gtk_text_buffer_set_text(gtk_text_view_get_buffer(GTK_TEXT_VIEW(s_test_entry)), "", -1);
-    }
-    if (s_ghost_countdown) { g_source_remove(s_ghost_countdown); s_ghost_countdown = 0; }
-    ghost_writer_cancel();
-    if (s_url_entry) {
-        gtk_entry_set_text(GTK_ENTRY(s_url_entry), "");
-    }
-
     s_user_moved = FALSE;
 
-    /* 3. Reset input states (mirror mode, no target, ghost mode off) */
+    /* 3. Reset normal application typing and click-through state */
     input_release_grab();
     input_set_typing_target(TYPING_TARGET_NONE);
-    input_set_key_mode(KEY_MODE_MIRROR);
     input_set_ghost_mode(GHOST_MODE_OFF);
     overlay_set_ghost(FALSE);
-    overlay_set_ghost_button_state(GHOST_BTN_IDLE);
 
-    /* 4. Reset browser subsystem (recreates web views with clean history) */
-    browser_universal_reset();
+    /* 4. Reset ChatGPT navigation, preserving login data */
+    chat_view_universal_reset();
 
     /* 5. Switch overlay view to home screen */
     overlay_go_home();
@@ -1172,11 +918,6 @@ static void on_btn_back_clicked(GtkButton *btn, gpointer user_data) {
     overlay_back();
 }
 
-static void on_btn_reload_clicked(GtkButton *btn, gpointer user_data) {
-    (void)btn; (void)user_data;
-    overlay_reload();
-}
-
 static void on_btn_home_clicked(GtkButton *btn, gpointer user_data) {
     (void)btn; (void)user_data;
     overlay_go_home();
@@ -1190,276 +931,6 @@ static void on_btn_universal_refresh_clicked(GtkButton *btn, gpointer user_data)
 static void on_btn_snap_clicked(GtkButton *btn, gpointer user_data) {
     (void)btn; (void)user_data;
     overlay_snap();
-}
-
-void overlay_toggle_ghost_input(void) {
-    overlay_switch_app("ghost");
-    if (!ghost_is_typing() && !s_ghost_countdown) {
-        gtk_widget_grab_focus(s_test_entry);
-        input_set_typing_target(TYPING_TARGET_OVERLAY);
-    }
-}
-
-static void on_btn_ghost_clicked(GtkButton *btn, gpointer user_data) {
-    (void)btn; (void)user_data;
-    overlay_toggle_ghost_input();
-}
-
-void overlay_ghost_progress(size_t typed, size_t total) {
-    if (!s_ghost_status) return;
-    char text[96];
-    g_snprintf(text, sizeof(text), "Typing %zu / %zu", typed, total);
-    gtk_label_set_text(GTK_LABEL(s_ghost_status), text);
-}
-
-static void ghost_settings_save(void) {
-    GhostTiming t = ghost_get_timing();
-    t.human = gtk_switch_get_active(GTK_SWITCH(s_ghost_human));
-    t.safe = gtk_switch_get_active(GTK_SWITCH(s_ghost_safe));
-    for (int i = 0; i < 3; i++)
-        if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(s_ghost_modes[i]))) t.speed = i;
-    ghost_set_timing(t);
-}
-
-static void on_ghost_mode_toggled(GtkToggleButton *button, gpointer data) {
-    (void)data;
-    if (gtk_toggle_button_get_active(button)) ghost_settings_save();
-}
-
-static void on_ghost_safe_toggled(GObject *sw, GParamSpec *pspec, gpointer data) {
-    (void)sw; (void)pspec; (void)data;
-    ghost_settings_save();
-}
-
-static void on_ghost_human_toggled(GObject *sw, GParamSpec *pspec, gpointer data) {
-    (void)sw; (void)pspec; (void)data;
-    gtk_widget_set_visible(s_ghost_mode_row, gtk_switch_get_active(GTK_SWITCH(s_ghost_human)));
-    ghost_settings_save();
-}
-
-static gboolean ghost_eta_tick(gpointer data) {
-    (void)data;
-    int ms = ghost_eta_remaining_ms();
-    if (ms < 0) {
-        gtk_widget_hide(s_ghost_eta);
-        return G_SOURCE_CONTINUE;   /* countdown still running; stopped by button state */
-    }
-    int sec = (ms + 999) / 1000;
-    char text[32];
-    if (sec < 60) g_snprintf(text, sizeof(text), "est: %ds", MAX(sec, 1));
-    else if (sec < 3600) g_snprintf(text, sizeof(text), "est: %dm %02ds", sec / 60, sec % 60);
-    else g_snprintf(text, sizeof(text), "est: %dh %02dm", sec / 3600, (sec % 3600) / 60);
-    gtk_label_set_text(GTK_LABEL(s_ghost_eta), text);
-    gtk_widget_show(s_ghost_eta);
-    return G_SOURCE_CONTINUE;
-}
-
-static gboolean ghost_countdown_tick(gpointer data) {
-    (void)data;
-    if (--s_ghost_seconds > 0) {
-        char text[96];
-        g_snprintf(text, sizeof(text), "Starting in %d… click the target", s_ghost_seconds);
-        gtk_label_set_text(GTK_LABEL(s_ghost_status), text);
-        return G_SOURCE_CONTINUE;
-    }
-    s_ghost_countdown = 0;
-    ghost_writer_run();
-    return G_SOURCE_REMOVE;
-}
-
-static void on_ghost_start(GtkButton *button, gpointer data) {
-    (void)button; (void)data;
-    if (s_ghost_countdown) {
-        g_source_remove(s_ghost_countdown); s_ghost_countdown = 0;
-        overlay_set_ghost_button_state(GHOST_BTN_IDLE); return;
-    }
-    if (ghost_is_typing()) { ghost_writer_cancel(); return; }
-    if (!*overlay_get_test_entry_text()) { overlay_show_toast("Nothing to type"); return; }
-    ghost_settings_save();
-    input_release_grab(); input_set_typing_target(TYPING_TARGET_NONE);
-    hotkey_remove_clipboard_shield();
-    overlay_set_ghost_button_state(GHOST_BTN_TYPING);
-    gtk_button_set_label(GTK_BUTTON(s_ghost_start), "Cancel");
-    gtk_label_set_text(GTK_LABEL(s_ghost_status), "Starting in 3… click the target");
-    s_ghost_seconds = 3;
-    s_ghost_countdown = g_timeout_add(1000, ghost_countdown_tick, NULL);
-}
-
-static GtkWidget *ghost_label(const char *text) {
-    GtkWidget *label = gtk_label_new(text);
-    gtk_label_set_xalign(GTK_LABEL(label), 0);
-    gtk_label_set_line_wrap(GTK_LABEL(label), TRUE);
-    return label;
-}
-
-static GtkWidget *create_ghost_page(void) {
-    GtkWidget *page = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
-    gtk_container_set_border_width(GTK_CONTAINER(page), 14);
-    gtk_style_context_add_class(gtk_widget_get_style_context(page), "ghost-page");
-
-    /* Everything but status + Start scrolls, so no control is ever out of reach. */
-    GtkWidget *content = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
-    GtkWidget *page_scroll = gtk_scrolled_window_new(NULL, NULL);
-    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(page_scroll), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
-    gtk_scrolled_window_set_min_content_height(GTK_SCROLLED_WINDOW(page_scroll), 80);
-    gtk_container_add(GTK_CONTAINER(page_scroll), content);
-    gtk_box_pack_start(GTK_BOX(page), page_scroll, TRUE, TRUE, 0);
-
-    GtkWidget *title = ghost_label("Ghost Typer");
-    gtk_style_context_add_class(gtk_widget_get_style_context(title), "ghost-title");
-    gtk_box_pack_start(GTK_BOX(content), title, FALSE, FALSE, 0);
-
-    /* Editor grows with its text between a small minimum and a cap. */
-    GtkWidget *scroll = gtk_scrolled_window_new(NULL, NULL);
-    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scroll), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
-    gtk_scrolled_window_set_min_content_height(GTK_SCROLLED_WINDOW(scroll), 72);
-    gtk_scrolled_window_set_max_content_height(GTK_SCROLLED_WINDOW(scroll), 180);
-    gtk_scrolled_window_set_propagate_natural_height(GTK_SCROLLED_WINDOW(scroll), TRUE);
-    s_test_entry = gtk_text_view_new();
-    gtk_text_view_set_monospace(GTK_TEXT_VIEW(s_test_entry), TRUE);
-    gtk_text_view_set_wrap_mode(GTK_TEXT_VIEW(s_test_entry), GTK_WRAP_WORD_CHAR);
-    gtk_text_view_set_left_margin(GTK_TEXT_VIEW(s_test_entry), 12);
-    gtk_text_view_set_right_margin(GTK_TEXT_VIEW(s_test_entry), 12);
-    gtk_text_view_set_top_margin(GTK_TEXT_VIEW(s_test_entry), 10);
-    gtk_text_view_set_bottom_margin(GTK_TEXT_VIEW(s_test_entry), 10);
-    g_signal_connect(s_test_entry, "button-press-event", G_CALLBACK(on_widget_button_press), NULL);
-    g_signal_connect(gtk_text_view_get_buffer(GTK_TEXT_VIEW(s_test_entry)), "changed", G_CALLBACK(on_test_entry_changed), NULL);
-    gtk_container_add(GTK_CONTAINER(scroll), s_test_entry);
-    GtkWidget *editor = gtk_overlay_new();
-    gtk_container_add(GTK_CONTAINER(editor), scroll);
-    GtkWidget *frame = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
-    gtk_style_context_add_class(gtk_widget_get_style_context(frame), "editor-frame");
-    gtk_box_pack_start(GTK_BOX(frame), editor, TRUE, TRUE, 0);
-    s_ghost_placeholder = ghost_label("Type here");
-    gtk_style_context_add_class(gtk_widget_get_style_context(s_ghost_placeholder), "editor-hint");
-    gtk_widget_set_halign(s_ghost_placeholder, GTK_ALIGN_START);
-    gtk_widget_set_valign(s_ghost_placeholder, GTK_ALIGN_START);
-    gtk_widget_set_margin_start(s_ghost_placeholder, 13);
-    gtk_widget_set_margin_top(s_ghost_placeholder, 11);
-    gtk_overlay_add_overlay(GTK_OVERLAY(editor), s_ghost_placeholder);
-    gtk_overlay_set_overlay_pass_through(GTK_OVERLAY(editor), s_ghost_placeholder, TRUE);
-    gtk_widget_set_no_show_all(s_ghost_placeholder, TRUE);
-    gtk_widget_show(s_ghost_placeholder);
-    gtk_box_pack_start(GTK_BOX(content), frame, FALSE, FALSE, 0);
-    s_ghost_count = ghost_label("0 chars · 1 line");
-    gtk_style_context_add_class(gtk_widget_get_style_context(s_ghost_count), "dim-label");
-    gtk_box_pack_start(GTK_BOX(content), s_ghost_count, FALSE, FALSE, 0);
-
-    s_ghost_controls = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
-    GhostTiming saved = ghost_get_timing();
-
-    GtkWidget *human_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
-    gtk_box_pack_start(GTK_BOX(human_row), ghost_label("Human-like"), TRUE, TRUE, 0);
-    s_ghost_human = gtk_switch_new();
-    gtk_widget_set_can_focus(s_ghost_human, FALSE);
-    gtk_widget_set_valign(s_ghost_human, GTK_ALIGN_CENTER);
-    gtk_switch_set_active(GTK_SWITCH(s_ghost_human), saved.human);
-    gtk_box_pack_start(GTK_BOX(human_row), s_ghost_human, FALSE, FALSE, 0);
-    gtk_box_pack_start(GTK_BOX(s_ghost_controls), human_row, FALSE, FALSE, 0);
-
-    /* Everything that only applies to human typing hides with the switch. */
-    s_ghost_mode_row = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
-    GtkWidget *safe_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
-    gtk_box_pack_start(GTK_BOX(safe_row), ghost_label("Extra safe"), TRUE, TRUE, 0);
-    s_ghost_safe = gtk_switch_new();
-    gtk_widget_set_can_focus(s_ghost_safe, FALSE);
-    gtk_widget_set_valign(s_ghost_safe, GTK_ALIGN_CENTER);
-    gtk_switch_set_active(GTK_SWITCH(s_ghost_safe), saved.safe);
-    gtk_box_pack_start(GTK_BOX(safe_row), s_ghost_safe, FALSE, FALSE, 0);
-    gtk_box_pack_start(GTK_BOX(s_ghost_mode_row), safe_row, FALSE, FALSE, 0);
-    GtkWidget *modes = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
-    gtk_box_set_homogeneous(GTK_BOX(modes), TRUE);
-    const char *names[] = {"Slow", "Moderate", "Fast"};
-    for (int i = 0; i < 3; i++) {
-        s_ghost_modes[i] = i ? gtk_radio_button_new_with_label_from_widget(GTK_RADIO_BUTTON(s_ghost_modes[0]), names[i])
-                             : gtk_radio_button_new_with_label(NULL, names[i]);
-        gtk_toggle_button_set_mode(GTK_TOGGLE_BUTTON(s_ghost_modes[i]), FALSE);
-        gtk_widget_set_can_focus(s_ghost_modes[i], FALSE);
-        gtk_style_context_add_class(gtk_widget_get_style_context(s_ghost_modes[i]), "mode-btn");
-        gtk_box_pack_start(GTK_BOX(modes), s_ghost_modes[i], TRUE, TRUE, 0);
-    }
-    gtk_box_pack_start(GTK_BOX(s_ghost_mode_row), modes, FALSE, FALSE, 0);
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(s_ghost_modes[saved.speed]), TRUE);
-    for (int i = 0; i < 3; i++) {
-        g_signal_connect(s_ghost_modes[i], "button-press-event", G_CALLBACK(on_widget_button_press), NULL);
-        g_signal_connect(s_ghost_modes[i], "toggled", G_CALLBACK(on_ghost_mode_toggled), NULL);
-    }
-    g_signal_connect(s_ghost_safe, "notify::active", G_CALLBACK(on_ghost_safe_toggled), NULL);
-    g_signal_connect(s_ghost_safe, "button-press-event", G_CALLBACK(on_widget_button_press), NULL);
-    gtk_widget_show_all(s_ghost_mode_row);
-    gtk_widget_set_no_show_all(s_ghost_mode_row, TRUE);
-    gtk_widget_set_visible(s_ghost_mode_row, saved.human);
-    gtk_box_pack_start(GTK_BOX(s_ghost_controls), s_ghost_mode_row, FALSE, FALSE, 0);
-    g_signal_connect(s_ghost_human, "notify::active", G_CALLBACK(on_ghost_human_toggled), NULL);
-    g_signal_connect(s_ghost_human, "button-press-event", G_CALLBACK(on_widget_button_press), NULL);
-    gtk_box_pack_start(GTK_BOX(content), s_ghost_controls, FALSE, FALSE, 0);
-
-    GtkWidget *status_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
-    s_ghost_status = ghost_label("Ready");
-    gtk_style_context_add_class(gtk_widget_get_style_context(s_ghost_status), "dim-label");
-    gtk_box_pack_start(GTK_BOX(status_row), s_ghost_status, TRUE, TRUE, 0);
-    s_ghost_eta = gtk_label_new("");
-    gtk_style_context_add_class(gtk_widget_get_style_context(s_ghost_eta), "eta");
-    gtk_widget_set_no_show_all(s_ghost_eta, TRUE);
-    gtk_box_pack_end(GTK_BOX(status_row), s_ghost_eta, FALSE, FALSE, 0);
-    gtk_box_pack_start(GTK_BOX(page), status_row, FALSE, FALSE, 0);
-    s_ghost_start = gtk_button_new_with_label("Start");
-    gtk_style_context_add_class(gtk_widget_get_style_context(s_ghost_start), "start-typing");
-    gtk_widget_set_can_focus(s_ghost_start, FALSE);
-    g_signal_connect(s_ghost_start, "button-press-event", G_CALLBACK(on_widget_button_press), NULL);
-    g_signal_connect(s_ghost_start, "clicked", G_CALLBACK(on_ghost_start), NULL);
-    gtk_box_pack_start(GTK_BOX(page), s_ghost_start, FALSE, FALSE, 0);
-    return page;
-}
-
-static gboolean on_ghost_revert_btn_label(gpointer user_data) {
-    (void)user_data;
-    s_ghost_revert_timer = 0;
-    if (s_btn_ghost_stack) {
-        gtk_stack_set_visible_child_name(GTK_STACK(s_btn_ghost_stack), "idle");
-    }
-    return G_SOURCE_REMOVE;
-}
-
-void overlay_set_ghost_button_state(GhostButtonState state) {
-    gboolean typing = state == GHOST_BTN_TYPING;
-    if (s_ghost_start) gtk_button_set_label(GTK_BUTTON(s_ghost_start), typing ? "Stop" : "Start");
-    if (s_ghost_controls) gtk_widget_set_sensitive(s_ghost_controls, !typing);
-    if (s_ghost_eta) {
-        if (typing && !s_ghost_eta_timer) s_ghost_eta_timer = g_timeout_add(500, ghost_eta_tick, NULL);
-        if (!typing) {
-            if (s_ghost_eta_timer) { g_source_remove(s_ghost_eta_timer); s_ghost_eta_timer = 0; }
-            gtk_widget_hide(s_ghost_eta);
-        }
-    }
-    if (s_test_entry) gtk_text_view_set_editable(GTK_TEXT_VIEW(s_test_entry), !typing);
-    if (s_ghost_status) gtk_label_set_text(GTK_LABEL(s_ghost_status),
-        typing ? "Typing…" :
-        state == GHOST_BTN_DONE ? "Done" :
-        state == GHOST_BTN_FAILED ? "Stopped" : "Ready");
-    if (!s_btn_ghost_stack) return;
-
-    if (s_ghost_revert_timer > 0) {
-        g_source_remove(s_ghost_revert_timer);
-        s_ghost_revert_timer = 0;
-    }
-
-    switch (state) {
-        case GHOST_BTN_IDLE:
-            gtk_stack_set_visible_child_name(GTK_STACK(s_btn_ghost_stack), "idle");
-            break;
-        case GHOST_BTN_TYPING:
-            gtk_stack_set_visible_child_name(GTK_STACK(s_btn_ghost_stack), "typing");
-            break;
-        case GHOST_BTN_DONE:
-            gtk_stack_set_visible_child_name(GTK_STACK(s_btn_ghost_stack), "done");
-            s_ghost_revert_timer = g_timeout_add(1200, on_ghost_revert_btn_label, NULL);
-            break;
-        case GHOST_BTN_FAILED:
-            gtk_stack_set_visible_child_name(GTK_STACK(s_btn_ghost_stack), "failed");
-            s_ghost_revert_timer = g_timeout_add(1200, on_ghost_revert_btn_label, NULL);
-            break;
-    }
 }
 
 static gboolean on_toast_dismiss_timeout(gpointer user_data) {
@@ -1493,6 +964,7 @@ static GtkWidget *create_nav_pill(GtkWidget **out_box, GtkWidget **out_dot, GtkW
     gtk_style_context_add_class(gtk_widget_get_style_context(box), "nav-pill");
 
     GtkWidget *dot = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+    gtk_widget_set_valign(dot, GTK_ALIGN_CENTER);
     gtk_style_context_add_class(gtk_widget_get_style_context(dot), "nav-pill-dot");
     gtk_box_pack_start(GTK_BOX(box), dot, FALSE, FALSE, 0);
 
@@ -1512,7 +984,7 @@ static GtkWidget *create_nav_pill(GtkWidget **out_box, GtkWidget **out_dot, GtkW
 
 static gboolean on_mode_pill_clicked(GtkWidget *widget, GdkEventButton *event, gpointer user_data) {
     (void)widget; (void)event; (void)user_data;
-    input_cycle_key_mode();
+    input_toggle_typing_target();
     overlay_update_status_ui();
     return TRUE;
 }
@@ -1548,16 +1020,7 @@ static void on_app_icon_clicked(GtkButton *btn, gpointer user_data) {
         overlay_universal_reset();
         return;
     }
-    if (strcmp(app, "ghost") == 0) overlay_toggle_ghost_input();
-    else overlay_switch_app(app);
-}
-
-static void on_home_search_clicked(GtkWidget *widget, GdkEventButton *event, gpointer user_data) {
-    (void)widget; (void)event; (void)user_data;
-    overlay_switch_app("browser");
-    if (s_url_entry) {
-        gtk_widget_grab_focus(s_url_entry);
-    }
+    overlay_switch_app(app);
 }
 
 static GtkWidget *create_app_icon_widget(const char *label_text, const char *app_id) {
@@ -1568,14 +1031,7 @@ static GtkWidget *create_app_icon_widget(const char *label_text, const char *app
     GtkWidget *col = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
     gtk_widget_set_halign(col, GTK_ALIGN_CENTER);
 
-    GtkWidget *img = NULL;
-    if (strcmp(app_id, "chatgpt") == 0) {
-        img = create_svg_image(s_svg_chatgpt_icon, 50, 50);
-    } else if (strcmp(app_id, "ghost") == 0) {
-        img = create_svg_image(s_svg_ghost_app, 50, 50);
-    } else {
-        img = create_svg_image(s_svg_browser_icon, 50, 50);
-    }
+    GtkWidget *img = create_svg_image(s_svg_chatgpt_icon,50,50);
     gtk_box_pack_start(GTK_BOX(col), img, FALSE, FALSE, 0);
 
     GtkWidget *lbl = gtk_label_new(label_text);
@@ -1595,57 +1051,14 @@ static GtkWidget *create_home_page(void) {
     GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
     gtk_style_context_add_class(gtk_widget_get_style_context(box), "home-page");
 
-    /* Top spacing (compact) */
-    GtkWidget *top_spacer = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
-    gtk_widget_set_size_request(top_spacer, -1, 8);
-    gtk_box_pack_start(GTK_BOX(box), top_spacer, FALSE, FALSE, 0);
-
-    /* Search Bar Launcher */
-    GtkWidget *search_eb = gtk_event_box_new();
-    gtk_event_box_set_visible_window(GTK_EVENT_BOX(search_eb), FALSE);
-    gtk_widget_set_margin_start(search_eb, 20);
-    gtk_widget_set_margin_end(search_eb, 20);
-    gtk_widget_set_margin_bottom(search_eb, 12);
-    s_home_search_eb = search_eb;
-
-    GtkWidget *search_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
-    gtk_style_context_add_class(gtk_widget_get_style_context(search_box), "home-search-bar");
-
-    GtkWidget *search_icon = create_svg_image(s_svg_search_icon, 16, 16);
-    gtk_box_pack_start(GTK_BOX(search_box), search_icon, FALSE, FALSE, 0);
-
-    GtkWidget *search_lbl = gtk_label_new("Search or type URL...");
-    gtk_style_context_add_class(gtk_widget_get_style_context(search_lbl), "home-search-label");
-    gtk_box_pack_start(GTK_BOX(search_box), search_lbl, FALSE, FALSE, 0);
-
-    gtk_container_add(GTK_CONTAINER(search_eb), search_box);
-    g_signal_connect(search_eb, "button-press-event", G_CALLBACK(on_home_search_clicked), NULL);
-    gtk_box_pack_start(GTK_BOX(box), search_eb, FALSE, FALSE, 0);
-
-    /* Section Header */
-    GtkWidget *sec_lbl = gtk_label_new("APPLICATIONS");
-    gtk_style_context_add_class(gtk_widget_get_style_context(sec_lbl), "home-section-title");
-    gtk_widget_set_halign(sec_lbl, GTK_ALIGN_START);
-    gtk_widget_set_margin_start(sec_lbl, 24);
-    gtk_widget_set_margin_bottom(sec_lbl, 6);
-    s_home_sec_lbl = sec_lbl;
-    gtk_box_pack_start(GTK_BOX(box), sec_lbl, FALSE, FALSE, 0);
-
-    /* App Icons Grid: ChatGPT and Chrome */
-    GtkWidget *apps_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 14);
+    /* Centre the available tool in the viewport, without empty tool slots. */
+    GtkWidget *apps_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
     gtk_widget_set_halign(apps_box, GTK_ALIGN_CENTER);
-    gtk_widget_set_valign(apps_box, GTK_ALIGN_START);
+    gtk_widget_set_valign(apps_box, GTK_ALIGN_CENTER);
 
     GtkWidget *btn_chatgpt = create_app_icon_widget("ChatGPT", "chatgpt");
     gtk_box_pack_start(GTK_BOX(apps_box), btn_chatgpt, FALSE, FALSE, 0);
 
-    GtkWidget *btn_chrome = create_app_icon_widget("Chrome", "browser");
-    gtk_box_pack_start(GTK_BOX(apps_box), btn_chrome, FALSE, FALSE, 0);
-    GtkWidget *btn_ghost_app = create_app_icon_widget("Ghost Typer", "ghost");
-    gtk_box_pack_start(GTK_BOX(apps_box), btn_ghost_app, FALSE, FALSE, 0);
-
-    /* The icon row takes the free space so camouflage can centre it (like Windows) without moving anything else. */
-    s_home_apps_box = apps_box;
     gtk_box_pack_start(GTK_BOX(box), apps_box, TRUE, TRUE, 0);
 
     return box;
@@ -1710,7 +1123,7 @@ void overlay_close_popup_modal(void) {
         gtk_widget_destroy(s_popup_container);
         s_popup_container = NULL;
         s_popup_child_view = NULL;
-        browser_clear_active_popup();
+        chat_view_clear_active_popup();
         xutil_log("WINDOW", "Closed popup modal layer.");
     }
 }
@@ -1723,24 +1136,15 @@ GtkWidget *overlay_get_popup_child_view(void) {
     return s_popup_child_view;
 }
 
-static void on_browser_popup_created(GtkWidget *popup_view, gpointer user_data) {
+static void on_chat_view_popup_created(GtkWidget *popup_view, gpointer user_data) {
     (void)user_data;
     overlay_show_popup_modal(popup_view);
 }
 
-static void on_browser_popup_closed(GtkWidget *popup_view, gpointer user_data) {
+static void on_chat_view_popup_closed(GtkWidget *popup_view, gpointer user_data) {
     (void)user_data;
     (void)popup_view;
     overlay_close_popup_modal();
-}
-
-static void on_browser_divert(const char *uri, gpointer user_data) {
-    (void)user_data;
-    if (uri && uri[0] != '\0') {
-        xutil_log("WINDOW", "Diverting external URI '%s' to Browser app.", uri);
-        browser_load_in_browser(uri);
-        overlay_switch_app("browser");
-    }
 }
 
 void overlay_execute_clipboard_action(ClipboardAction action) {
@@ -1765,23 +1169,9 @@ void overlay_execute_clipboard_action(ClipboardAction action) {
                 gtk_editable_cut_clipboard(GTK_EDITABLE(focused));
                 break;
         }
-    } else if ((focused && GTK_IS_TEXT_VIEW(focused)) ||
-               (strcmp(s_current_app, "ghost") == 0 && s_test_entry)) {
-        GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(
-            focused && GTK_IS_TEXT_VIEW(focused) ? focused : s_test_entry));
-        GtkClipboard *clipboard = gtk_clipboard_get(GDK_SELECTION_CLIPBOARD);
-        GtkTextIter begin, end;
-        switch (action) {
-            case CLIPBOARD_ACTION_SELECT_ALL:
-                gtk_text_buffer_get_bounds(buffer, &begin, &end);
-                gtk_text_buffer_select_range(buffer, &begin, &end); break;
-            case CLIPBOARD_ACTION_COPY: gtk_text_buffer_copy_clipboard(buffer, clipboard); break;
-            case CLIPBOARD_ACTION_PASTE: gtk_text_buffer_paste_clipboard(buffer, clipboard, NULL, TRUE); break;
-            case CLIPBOARD_ACTION_CUT: gtk_text_buffer_cut_clipboard(buffer, clipboard, TRUE); break;
-        }
     } else {
         if (action == CLIPBOARD_ACTION_PASTE) {
-            browser_paste();
+            chat_view_paste();
         } else {
             const char *cmd = NULL;
             switch (action) {
@@ -1791,7 +1181,7 @@ void overlay_execute_clipboard_action(ClipboardAction action) {
                 default: break;
             }
             if (cmd) {
-                browser_execute_editing_command(cmd);
+                chat_view_execute_editing_command(cmd);
             }
         }
     }
@@ -1830,17 +1220,31 @@ void overlay_apply_theme(void) {
     gboolean camo = theme_is_camo();
     reload_theme_css();
     refresh_themed_svgs();
-    set_camo_hidden(s_status_bar, camo);
+    set_camo_hidden(s_status_bar,FALSE);
+    if (s_status_bar) {
+        GList *items=gtk_container_get_children(GTK_CONTAINER(s_status_bar));
+        for(GList *it=items;it;it=it->next) {
+            GtkWidget *group=it->data;
+            if(GTK_IS_CONTAINER(group)) {
+                GList *children=gtk_container_get_children(GTK_CONTAINER(group));
+                for(GList *ch=children;ch;ch=ch->next) {
+                    GtkWidget *item=ch->data;
+                    if(item!=gtk_widget_get_parent(s_mode_pill_box)) set_camo_hidden(item,camo);
+                }
+                g_list_free(children);
+            }
+        }
+        g_list_free(items);
+    }
     set_camo_hidden(s_bottom_nav, camo);
-    set_camo_hidden(s_header_box, camo);
-    set_camo_hidden(s_home_search_eb, camo);
-    set_camo_hidden(s_home_sec_lbl, camo);
     if (s_app_labels) {
         for (guint i = 0; i < s_app_labels->len; i++)
             set_camo_hidden(g_ptr_array_index(s_app_labels, i), camo);
     }
-    if (s_home_apps_box) gtk_widget_set_valign(s_home_apps_box, camo ? GTK_ALIGN_CENTER : GTK_ALIGN_START);
     if (s_theme_btn_label) gtk_label_set_text(GTK_LABEL(s_theme_btn_label), theme_mode_label());
+    /* Showing chrome after a theme change must keep the failure alert hidden
+     * unless keyboard capture actually failed. */
+    overlay_update_status_ui();
     gtk_widget_queue_draw(s_window);
     xutil_log("WINDOW", "Applied theme '%s' (camo=%d).", theme_mode_label(), camo);
 }
@@ -1850,8 +1254,8 @@ gboolean window_init(gboolean start_visible) {
 
     /* 1. Create GTK_WINDOW_POPUP -> Sets override_redirect at X11 level */
     s_window = gtk_window_new(GTK_WINDOW_POPUP);
-    s_win_width = (cfg->width > 0) ? cfg->width : OVERLAY_WIDTH;
-    s_win_height = OVERLAY_COMPACT_HEIGHT;
+    fitted_size(&s_win_width,&s_win_height);
+    s_win_height = MIN(OVERLAY_COMPACT_HEIGHT,s_win_height);
     s_current_opacity = cfg->opacity;
 
     gtk_window_set_default_size(GTK_WINDOW(s_window), s_win_width, s_win_height);
@@ -1888,7 +1292,7 @@ gboolean window_init(gboolean start_visible) {
     g_signal_connect(s_window, "draw", G_CALLBACK(on_window_draw), NULL);
 
     /* 3. Focus policy & taskbar/pager hints */
-    gtk_window_set_accept_focus(GTK_WINDOW(s_window), TRUE);
+    gtk_window_set_accept_focus(GTK_WINDOW(s_window), FALSE);
     gtk_window_set_focus_on_map(GTK_WINDOW(s_window), FALSE);
     gtk_window_set_skip_taskbar_hint(GTK_WINDOW(s_window), TRUE);
     gtk_window_set_skip_pager_hint(GTK_WINDOW(s_window), TRUE);
@@ -1929,7 +1333,7 @@ gboolean window_init(gboolean start_visible) {
     GtkWidget *left_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
     gtk_widget_set_halign(left_box, GTK_ALIGN_START);
 
-    GtkWidget *mode_pill_eb = create_nav_pill(&s_mode_pill_box, &s_mode_dot, &s_mode_pill, "Mirror");
+    GtkWidget *mode_pill_eb = create_nav_pill(&s_mode_pill_box, &s_mode_dot, &s_mode_pill, "Normal typing");
     g_signal_connect(mode_pill_eb, "button-press-event", G_CALLBACK(on_mode_pill_clicked), NULL);
     gtk_box_pack_start(GTK_BOX(left_box), mode_pill_eb, FALSE, FALSE, 0);
 
@@ -1942,7 +1346,6 @@ gboolean window_init(gboolean start_visible) {
     if (s_grab_box) {
         gtk_style_context_add_class(gtk_widget_get_style_context(s_grab_box), "pill-grab-alert");
     }
-    gtk_widget_set_tooltip_text(s_grab_pill, "Keyboard grab blocked");
     gtk_box_pack_start(GTK_BOX(left_box), s_grab_pill, FALSE, FALSE, 0);
     gtk_widget_set_no_show_all(s_grab_pill, TRUE);
     gtk_widget_hide(s_grab_pill);
@@ -1953,7 +1356,6 @@ gboolean window_init(gboolean start_visible) {
     gtk_style_context_add_class(gtk_widget_get_style_context(s_theme_btn), "theme-btn");
     s_theme_btn_label = gtk_label_new(theme_mode_label());
     gtk_container_add(GTK_CONTAINER(s_theme_btn), s_theme_btn_label);
-    gtk_widget_set_tooltip_text(s_theme_btn, "Appearance: Dark / Light / Camo (Alt+C camo, Alt+T text colour)");
     g_signal_connect(s_theme_btn, "clicked", G_CALLBACK(on_theme_btn_clicked), NULL);
     g_signal_connect(s_theme_btn, "button-press-event", G_CALLBACK(on_widget_button_press), NULL);
     gtk_box_pack_start(GTK_BOX(left_box), s_theme_btn, FALSE, FALSE, 0);
@@ -1961,13 +1363,9 @@ gboolean window_init(gboolean start_visible) {
     gtk_box_pack_start(GTK_BOX(status_bar), left_box, FALSE, FALSE, 0);
 
     /* Center: Move Handle */
-    GtkWidget *center_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
-    gtk_box_pack_start(GTK_BOX(status_bar), center_box, TRUE, TRUE, 0);
-
     s_move_handle_eb = gtk_event_box_new();
     gtk_event_box_set_visible_window(GTK_EVENT_BOX(s_move_handle_eb), FALSE);
     gtk_widget_add_events(s_move_handle_eb, GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK | GDK_BUTTON1_MOTION_MASK | GDK_POINTER_MOTION_MASK);
-    gtk_widget_set_tooltip_text(s_move_handle_eb, "Hold & drag to move | Double-click to expand");
     gtk_widget_set_halign(s_move_handle_eb, GTK_ALIGN_CENTER);
 
     GtkWidget *move_capsule = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
@@ -1980,7 +1378,7 @@ gboolean window_init(gboolean start_visible) {
     g_signal_connect(s_move_handle_eb, "motion-notify-event", G_CALLBACK(on_header_motion_notify), NULL);
     g_signal_connect(s_move_handle_eb, "button-release-event", G_CALLBACK(on_header_button_release), NULL);
 
-    gtk_box_pack_start(GTK_BOX(center_box), s_move_handle_eb, TRUE, TRUE, 0);
+    gtk_box_set_center_widget(GTK_BOX(status_bar), s_move_handle_eb);
 
     /* Right Controls: Fullscreen toggle & Close button */
     GtkWidget *right_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 4);
@@ -1989,7 +1387,6 @@ gboolean window_init(gboolean start_visible) {
     s_btn_top_fullscreen = gtk_button_new();
     gtk_widget_set_can_focus(s_btn_top_fullscreen, FALSE);
     gtk_style_context_add_class(gtk_widget_get_style_context(s_btn_top_fullscreen), "top-ctrl-btn");
-    gtk_widget_set_tooltip_text(s_btn_top_fullscreen, "Toggle Fullscreen");
     GtkWidget *img_fs = create_svg_image(s_svg_fullscreen_icon, 14, 14);
     gtk_container_add(GTK_CONTAINER(s_btn_top_fullscreen), img_fs);
     g_signal_connect(s_btn_top_fullscreen, "clicked", G_CALLBACK(on_btn_top_fullscreen_clicked), NULL);
@@ -2000,7 +1397,6 @@ gboolean window_init(gboolean start_visible) {
     gtk_widget_set_can_focus(s_btn_top_close, FALSE);
     gtk_style_context_add_class(gtk_widget_get_style_context(s_btn_top_close), "top-ctrl-btn");
     gtk_style_context_add_class(gtk_widget_get_style_context(s_btn_top_close), "top-close-btn");
-    gtk_widget_set_tooltip_text(s_btn_top_close, "Close Overlay");
     GtkWidget *img_close = create_svg_image(s_svg_top_close_icon, 14, 14);
     gtk_container_add(GTK_CONTAINER(s_btn_top_close), img_close);
     g_signal_connect(s_btn_top_close, "clicked", G_CALLBACK(on_btn_top_close_clicked), NULL);
@@ -2039,87 +1435,21 @@ gboolean window_init(gboolean start_visible) {
     gtk_stack_add_named(GTK_STACK(s_stack), home_page, "home");
 
     /* 2. Page: ChatGPT App (Full-screen WebKit inside phone, no URL bar) */
-    GtkWidget *cg_widget = browser_get_chatgpt_widget();
+    GtkWidget *cg_widget = chat_view_get_chatgpt_widget();
     if (cg_widget) {
         gtk_widget_add_events(cg_widget, GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK);
         g_signal_connect(cg_widget, "button-press-event", G_CALLBACK(on_widget_button_press), NULL);
         gtk_stack_add_named(GTK_STACK(s_stack), cg_widget, "chatgpt");
     }
 
-    /* 3. Page: Browser App (Header Box + WebKit View) */
-    GtkWidget *browser_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
-
-    s_header_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
-    gtk_style_context_add_class(gtk_widget_get_style_context(s_header_box), "header-box");
-    gtk_box_pack_start(GTK_BOX(browser_box), s_header_box, FALSE, FALSE, 0);
-
-    GtkWidget *url_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
-    gtk_style_context_add_class(gtk_widget_get_style_context(url_row), "url-bar-container");
-
-    GtkWidget *url_icon = create_svg_image(s_svg_search_icon, 14, 14);
-    gtk_style_context_add_class(gtk_widget_get_style_context(url_icon), "url-leading-icon");
-    gtk_box_pack_start(GTK_BOX(url_row), url_icon, FALSE, FALSE, 2);
-
-    s_url_entry = gtk_entry_new();
-    gtk_entry_set_placeholder_text(GTK_ENTRY(s_url_entry), "Search or enter website...");
-    gtk_style_context_add_class(gtk_widget_get_style_context(s_url_entry), "url-entry");
-    g_signal_connect(s_url_entry, "activate", G_CALLBACK(on_url_entry_activate), NULL);
-    g_signal_connect(s_url_entry, "button-press-event", G_CALLBACK(on_widget_button_press), NULL);
-    gtk_box_pack_start(GTK_BOX(url_row), s_url_entry, TRUE, TRUE, 0);
-
-    /* Compact Reload Button in Browser URL Row */
-    s_btn_reload = gtk_button_new();
-    gtk_widget_set_can_focus(s_btn_reload, FALSE);
-    gtk_style_context_add_class(gtk_widget_get_style_context(s_btn_reload), "url-action-btn");
-    gtk_widget_set_tooltip_text(s_btn_reload, "Reload page");
-
-    s_reload_stack = gtk_stack_new();
-    gtk_stack_set_transition_type(GTK_STACK(s_reload_stack), GTK_STACK_TRANSITION_TYPE_CROSSFADE);
-    gtk_stack_set_transition_duration(GTK_STACK(s_reload_stack), 100);
-
-    GtkWidget *img_reload = create_svg_image(s_svg_reload_icon, 16, 16);
-    GtkWidget *img_stop = create_svg_image(s_svg_stop_icon, 16, 16);
-    gtk_stack_add_named(GTK_STACK(s_reload_stack), img_reload, "reload");
-    gtk_stack_add_named(GTK_STACK(s_reload_stack), img_stop, "stop");
-    gtk_container_add(GTK_CONTAINER(s_btn_reload), s_reload_stack);
-    gtk_stack_set_visible_child_name(GTK_STACK(s_reload_stack), "reload");
-
-    g_signal_connect(s_btn_reload, "clicked", G_CALLBACK(on_btn_reload_clicked), NULL);
-    g_signal_connect(s_btn_reload, "button-press-event", G_CALLBACK(on_widget_button_press), NULL);
-    gtk_box_pack_start(GTK_BOX(url_row), s_btn_reload, FALSE, FALSE, 0);
-
-    gtk_box_pack_start(GTK_BOX(s_header_box), url_row, FALSE, FALSE, 0);
-
-    s_progress_bar = gtk_progress_bar_new();
-    gtk_style_context_add_class(gtk_widget_get_style_context(s_progress_bar), "load-progress");
-    gtk_widget_set_no_show_all(s_progress_bar, TRUE);
-    gtk_widget_hide(s_progress_bar);
-    gtk_box_pack_start(GTK_BOX(s_header_box), s_progress_bar, FALSE, FALSE, 0);
-
-    GtkWidget *br_widget = browser_get_browser_widget();
-    if (br_widget) {
-        gtk_widget_add_events(br_widget, GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK);
-        g_signal_connect(br_widget, "button-press-event", G_CALLBACK(on_widget_button_press), NULL);
-        gtk_box_pack_start(GTK_BOX(browser_box), br_widget, TRUE, TRUE, 0);
-    }
-    gtk_stack_add_named(GTK_STACK(s_stack), browser_box, "browser");
-
     /* Default view is HOME SCREEN */
     gtk_stack_set_visible_child_name(GTK_STACK(s_stack), "home");
     g_strlcpy(s_current_app, "home", sizeof(s_current_app));
 
-    /* Connect Browser Callbacks */
-    browser_set_uri_callback(on_browser_uri_changed, NULL);
-    browser_set_progress_callback(on_browser_progress_changed, NULL);
-    browser_set_state_callback(on_browser_state_changed, NULL);
-    browser_set_popup_callbacks(on_browser_popup_created, on_browser_popup_closed, NULL);
-    browser_set_divert_callback(on_browser_divert, NULL);
-    browser_set_click_callback(on_browser_clicked, NULL);
-
-    gtk_stack_add_named(GTK_STACK(s_stack), create_ghost_page(), "ghost");
+    chat_view_set_popup_callbacks(on_chat_view_popup_created,on_chat_view_popup_closed,NULL);
 
     /* --- Bottom Navigation Bar --- */
-    GtkWidget *bottom_nav = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 3);
+    GtkWidget *bottom_nav = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
     s_bottom_nav = bottom_nav;
     gtk_box_set_homogeneous(GTK_BOX(bottom_nav), TRUE);
     gtk_style_context_add_class(gtk_widget_get_style_context(bottom_nav), "bottom-nav");
@@ -2149,45 +1479,16 @@ gboolean window_init(gboolean start_visible) {
     gtk_widget_set_can_focus(s_btn_universal_refresh, FALSE);
     gtk_style_context_add_class(gtk_widget_get_style_context(s_btn_universal_refresh), "nav-button");
     gtk_style_context_add_class(gtk_widget_get_style_context(s_btn_universal_refresh), "nav-refresh-btn");
-    gtk_widget_set_tooltip_text(s_btn_universal_refresh, "Universal Refresh (Reset to New State)");
     GtkWidget *img_univ_refresh = create_svg_image(s_svg_universal_refresh_icon, 20, 20);
     add_nav_content(s_btn_universal_refresh, img_univ_refresh, "Reset");
     g_signal_connect(s_btn_universal_refresh, "clicked", G_CALLBACK(on_btn_universal_refresh_clicked), NULL);
     g_signal_connect(s_btn_universal_refresh, "button-press-event", G_CALLBACK(on_widget_button_press), NULL);
     gtk_box_pack_start(GTK_BOX(bottom_nav), s_btn_universal_refresh, TRUE, TRUE, 0);
 
-    /* Ghost Writer Button (Phase 7) */
-    s_btn_ghost = gtk_button_new();
-    gtk_widget_set_can_focus(s_btn_ghost, FALSE);
-    gtk_style_context_add_class(gtk_widget_get_style_context(s_btn_ghost), "nav-button");
-    gtk_widget_set_tooltip_text(s_btn_ghost, "Open Ghost Typer");
-
-    s_btn_ghost_stack = gtk_stack_new();
-    gtk_stack_set_transition_type(GTK_STACK(s_btn_ghost_stack), GTK_STACK_TRANSITION_TYPE_CROSSFADE);
-    gtk_stack_set_transition_duration(GTK_STACK(s_btn_ghost_stack), 100);
-
-    GtkWidget *img_ghost_idle = create_svg_image(s_svg_ghost_idle, 20, 20);
-    GtkWidget *img_ghost_typing = create_svg_image(s_svg_ghost_typing, 20, 20);
-    GtkWidget *img_ghost_done = create_svg_image(s_svg_check_icon, 20, 20);
-    GtkWidget *img_ghost_failed = create_svg_image(s_svg_failed_icon, 20, 20);
-
-    gtk_stack_add_named(GTK_STACK(s_btn_ghost_stack), img_ghost_idle, "idle");
-    gtk_stack_add_named(GTK_STACK(s_btn_ghost_stack), img_ghost_typing, "typing");
-    gtk_stack_add_named(GTK_STACK(s_btn_ghost_stack), img_ghost_done, "done");
-    gtk_stack_add_named(GTK_STACK(s_btn_ghost_stack), img_ghost_failed, "failed");
-
-    add_nav_content(s_btn_ghost, s_btn_ghost_stack, "Typer");
-    gtk_stack_set_visible_child_name(GTK_STACK(s_btn_ghost_stack), "idle");
-
-    g_signal_connect(s_btn_ghost, "clicked", G_CALLBACK(on_btn_ghost_clicked), NULL);
-    g_signal_connect(s_btn_ghost, "button-press-event", G_CALLBACK(on_widget_button_press), NULL);
-    gtk_box_pack_start(GTK_BOX(bottom_nav), s_btn_ghost, TRUE, TRUE, 0);
-
     /* Snap Button (Phase 6) */
     s_btn_snap = gtk_button_new();
     gtk_widget_set_can_focus(s_btn_snap, FALSE);
     gtk_style_context_add_class(gtk_widget_get_style_context(s_btn_snap), "nav-button");
-    gtk_widget_set_tooltip_text(s_btn_snap, "Capture Screen (Snap)");
     gtk_widget_set_sensitive(s_btn_snap, TRUE);
 
     s_snap_stack = gtk_stack_new();
@@ -2201,6 +1502,7 @@ gboolean window_init(gboolean start_visible) {
     gtk_stack_add_named(GTK_STACK(s_snap_stack), img_snap_cam, "camera");
     gtk_stack_add_named(GTK_STACK(s_snap_stack), img_snap_running, "snapping");
     gtk_stack_add_named(GTK_STACK(s_snap_stack), img_snap_done, "done");
+    gtk_stack_add_named(GTK_STACK(s_snap_stack), create_svg_image(s_svg_failed_icon,20,20), "failed");
 
     add_nav_content(s_btn_snap, s_snap_stack, "Snap");
     gtk_stack_set_visible_child_name(GTK_STACK(s_snap_stack), "camera");
@@ -2263,8 +1565,8 @@ gboolean window_init(gboolean start_visible) {
     xutil_log("WINDOW", "Created override-redirect overlay XID 0x%lx (%lu)",
               (unsigned long)s_xid, (unsigned long)s_xid);
 
-    /* Refresh status & clock every second */
-    s_clock_timer_id = g_timeout_add_seconds(1, on_clock_tick, NULL);
+
+
 
     if (start_visible) {
         overlay_show();
@@ -2276,6 +1578,7 @@ gboolean window_init(gboolean start_visible) {
 }
 
 void overlay_set_capture_hidden(gboolean hidden) {
+    if(hidden)input_release_grab();
     if (!s_window || s_xid == None) return;
     Display *xdpy = gdk_x11_display_get_xdisplay(gdk_display_get_default());
     if (hidden) {
@@ -2316,11 +1619,10 @@ void overlay_show(void) {
     s_visible = TRUE;
     xutil_log("WINDOW", "Overlay shown (mapped raised at (%d, %d))", s_pos_x, s_pos_y);
 
-    if (s_clock_timer_id == 0) {
-        s_clock_timer_id = g_timeout_add_seconds(1, on_clock_tick, NULL);
-    }
 
-    browser_resume();
+
+    chat_view_resume();
+    hotkey_reload_grabs();
     overlay_update_status_ui();
     raise_start();
 }
@@ -2329,17 +1631,17 @@ void overlay_hide(void) {
     if (!s_window) return;
 
     raise_stop();
-    input_release_grab();
     input_notify_overlay_hidden();
-    browser_pause();
+    chat_view_pause();
 
-    if (s_clock_timer_id > 0) {
-        g_source_remove(s_clock_timer_id);
-        s_clock_timer_id = 0;
-    }
 
-    gtk_widget_hide(s_window);
+
+    /* Keep GTK/WebKit mapped internally so native key dispatch still works.
+     * Only the X11 surface is hidden; no OS focus is changed. */
+    XUnmapWindow(gdk_x11_display_get_xdisplay(gdk_display_get_default()), s_xid);
+    XFlush(gdk_x11_display_get_xdisplay(gdk_display_get_default()));
     s_visible = FALSE;
+    hotkey_reload_grabs();
     xutil_log("WINDOW", "Overlay hidden");
 }
 
@@ -2362,10 +1664,11 @@ void overlay_apply_config(void) {
     if (!s_window || s_xid == None) return;
 
     const AppConfig *cfg = config_get();
+    s_user_moved = FALSE;
+    s_is_maximized = FALSE;
+    fitted_size(&s_win_width,&s_win_height);
+    if(!strcmp(s_current_app,"home"))s_win_height=MIN(OVERLAY_COMPACT_HEIGHT,s_win_height);
     calculate_monitor_position(&s_pos_x, &s_pos_y);
-
-    s_win_width = cfg->width;
-    s_win_height = cfg->height;
     s_current_opacity = cfg->opacity;
 
     gtk_window_resize(GTK_WINDOW(s_window), s_win_width, s_win_height);
@@ -2459,69 +1762,12 @@ void overlay_set_active_focus(gboolean active) {
     if (keyboard) {
         gdk_event_set_device(event, keyboard);
     }
-    gdk_event_put(event);
+    gtk_widget_event(s_window,event);
     gdk_event_free(event);
 }
 
 GtkWidget *overlay_get_window_widget(void) {
     return s_window;
-}
-
-GtkWidget *overlay_get_entry_widget(void) {
-    if (strcmp(s_current_app, "browser") == 0) {
-        if (s_url_entry && gtk_widget_has_focus(s_url_entry)) {
-            return s_url_entry;
-        }
-    }
-    return s_test_entry;
-}
-
-GtkWidget *overlay_get_test_entry(void) {
-    return s_test_entry;
-}
-
-GtkWidget *overlay_get_url_entry(void) {
-    return s_url_entry;
-}
-
-const char *overlay_get_test_entry_text(void) {
-    if (!s_test_entry) return "";
-    GtkTextIter start, end;
-    GtkTextBuffer *buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(s_test_entry));
-    gtk_text_buffer_get_bounds(buffer, &start, &end);
-    g_free(s_ghost_text_cache);
-    s_ghost_text_cache = gtk_text_buffer_get_text(buffer, &start, &end, TRUE);
-    return s_ghost_text_cache;
-}
-
-const char *overlay_get_entry_text(void) {
-    if (strcmp(s_current_app, "browser") == 0) {
-        if (s_url_entry && gtk_widget_has_focus(s_url_entry)) {
-            return gtk_entry_get_text(GTK_ENTRY(s_url_entry));
-        }
-        if (s_test_entry && gtk_widget_has_focus(s_test_entry)) {
-            return overlay_get_test_entry_text();
-        }
-        if (s_url_entry) {
-            return gtk_entry_get_text(GTK_ENTRY(s_url_entry));
-        }
-    }
-    if (!s_test_entry) return "";
-    return overlay_get_test_entry_text();
-}
-
-void overlay_clear_entry_text(void) {
-    if (s_test_entry) {
-        gtk_text_buffer_set_text(gtk_text_view_get_buffer(GTK_TEXT_VIEW(s_test_entry)), "", -1);
-        overlay_update_status_ui();
-    }
-}
-
-void overlay_set_entry_text(const char *text) {
-    if (s_test_entry && text) {
-        gtk_text_buffer_set_text(gtk_text_view_get_buffer(GTK_TEXT_VIEW(s_test_entry)), text, -1);
-        overlay_update_status_ui();
-    }
 }
 
 static char *get_user_runtime_snap_path(void) {
@@ -2536,23 +1782,18 @@ static char *get_user_runtime_snap_path(void) {
     return snap_path;
 }
 
-static void save_and_prune_snap(GdkPixbuf *pb, const AppConfig *cfg) {
-    const char *pics_dir = g_get_user_special_dir(G_USER_DIRECTORY_PICTURES);
-    char *dir_buf = NULL;
-    if (pics_dir && pics_dir[0] != '\0') {
-        dir_buf = g_build_filename(pics_dir, "cronq", NULL);
-    } else {
-        dir_buf = g_build_filename(g_get_home_dir(), "Pictures", "cronq", NULL);
-    }
+static gint compare_snap_names(gconstpointer a,gconstpointer b) { return g_strcmp0(*(char *const *)a,*(char *const *)b); }
+static gboolean save_and_prune_snap(GdkPixbuf *pb, const AppConfig *cfg) {
+    char *dir_buf=g_build_filename(g_get_user_data_dir(),"cronq","snaps",NULL);
 
     if (g_mkdir_with_parents(dir_buf, 0755) != 0) {
         xutil_log("WINDOW", "Failed to create directory %s: %s", dir_buf, g_strerror(errno));
         g_free(dir_buf);
-        return;
+        return FALSE;
     }
 
     GDateTime *now = g_date_time_new_now_local();
-    char *dt_str = g_date_time_format(now, "%Y%m%d-%H%M%S");
+    char *dt_str = g_date_time_format(now, "%Y%m%d-%H%M%S-%f");
     g_date_time_unref(now);
 
     char *base_name = g_strdup_printf("snap-%s.png", dt_str ? dt_str : "unknown");
@@ -2569,7 +1810,9 @@ static void save_and_prune_snap(GdkPixbuf *pb, const AppConfig *cfg) {
     g_free(dt_str);
 
     GError *err = NULL;
+    gboolean saved=FALSE;
     if (gdk_pixbuf_save(pb, filepath, "png", &err, "compression", "9", NULL)) {
+        saved=TRUE;
         xutil_log("WINDOW", "Saved screenshot to %s", filepath);
 
         /* 1. Secure primary link in user runtime directory */
@@ -2585,21 +1828,6 @@ static void save_and_prune_snap(GdkPixbuf *pb, const AppConfig *cfg) {
         }
         g_free(user_snap);
 
-        /* 2. Backward-compatible link to /tmp with UID safety check */
-        struct stat st;
-        if (lstat("/tmp/cronq_latest_snap.png", &st) == 0) {
-            if (st.st_uid == getuid()) {
-                unlink("/tmp/cronq_latest_snap.png");
-            }
-        }
-        if (symlink(filepath, "/tmp/cronq_latest_snap.png") != 0) {
-            gchar *data = NULL;
-            gsize len = 0;
-            if (g_file_get_contents(filepath, &data, &len, NULL)) {
-                g_file_set_contents("/tmp/cronq_latest_snap.png", data, len, NULL);
-                g_free(data);
-            }
-        }
     } else {
         xutil_log("WINDOW", "Failed to save screenshot %s: %s", filepath, err ? err->message : "unknown");
         if (err) g_error_free(err);
@@ -2619,7 +1847,7 @@ static void save_and_prune_snap(GdkPixbuf *pb, const AppConfig *cfg) {
         }
         g_dir_close(dir);
 
-        g_ptr_array_sort(files, (GCompareFunc)g_strcmp0);
+        g_ptr_array_sort(files, compare_snap_names);
 
         if ((int)files->len > keep_count) {
             int to_delete = (int)files->len - keep_count;
@@ -2633,6 +1861,7 @@ static void save_and_prune_snap(GdkPixbuf *pb, const AppConfig *cfg) {
         g_ptr_array_unref(files);
     }
     g_free(dir_buf);
+    return saved;
 }
 
 void overlay_capture_begin(void) {
@@ -2646,7 +1875,7 @@ void overlay_capture_begin(void) {
 }
 
 void overlay_capture_end(void) {
-    if (s_was_visible_during_snap && s_xid != None) {
+    if (s_was_visible_during_snap && s_visible && !s_capture_hidden && s_xid != None) {
         Display *xdpy = gdk_x11_display_get_xdisplay(gdk_display_get_default());
         XMapRaised(xdpy, s_xid);
         XSync(xdpy, False);
@@ -2664,6 +1893,21 @@ static gboolean on_snap_revert_btn_label(gpointer user_data) {
     return G_SOURCE_REMOVE;
 }
 
+static gboolean has_visible_pixels(GdkPixbuf *pb) {
+    int width=gdk_pixbuf_get_width(pb),height=gdk_pixbuf_get_height(pb),channels=gdk_pixbuf_get_n_channels(pb),stride=gdk_pixbuf_get_rowstride(pb);
+    const guchar *pixels=gdk_pixbuf_get_pixels(pb);
+    for(int y=0;y<height;y++)for(int x=0;x<width;x++){const guchar *p=pixels+y*stride+x*channels;if(p[0]||p[1]||p[2])return TRUE;}
+    return FALSE;
+}
+static GdkMonitor *active_monitor(GdkDisplay *display) {
+    Display *xdpy=gdk_x11_display_get_xdisplay(display);Window focus,child;int revert,x,y;
+    XGetInputFocus(xdpy,&focus,&revert);
+    XWindowAttributes attr;
+    if(focus!=None && focus!=PointerRoot && XGetWindowAttributes(xdpy,focus,&attr) &&
+       XTranslateCoordinates(xdpy,focus,DefaultRootWindow(xdpy),attr.width/2,attr.height/2,&x,&y,&child))
+        return gdk_display_get_monitor_at_point(display,x,y);
+    return gdk_display_get_primary_monitor(display);
+}
 static gboolean on_snap_timeout(gpointer user_data) {
     (void)user_data;
     const AppConfig *cfg = config_get();
@@ -2678,7 +1922,7 @@ static gboolean on_snap_timeout(gpointer user_data) {
         rh = gdk_window_get_height(root);
     } else {
         GdkDisplay *display = gdk_display_get_default();
-        GdkMonitor *mon = gdk_display_get_primary_monitor(display);
+        GdkMonitor *mon = active_monitor(display);
         if (!mon && s_window && gtk_widget_get_window(s_window)) {
             mon = gdk_display_get_monitor_at_window(display, gtk_widget_get_window(s_window));
         }
@@ -2705,6 +1949,7 @@ static gboolean on_snap_timeout(gpointer user_data) {
 
     /* Immediately restore overlay */
     overlay_capture_end();
+    if(pb && !has_visible_pixels(pb)){g_object_unref(pb);pb=NULL;}
 
     if (pb) {
         xutil_log("WINDOW", "Captured snap: %dx%d at (%d, %d)", rw, rh, rx, ry);
@@ -2715,9 +1960,8 @@ static gboolean on_snap_timeout(gpointer user_data) {
         gtk_clipboard_store(clip);
 
         /* Save to disk if enabled */
-        if (cfg->snap_save) {
-            save_and_prune_snap(pb, cfg);
-        }
+        gboolean saved=!cfg->snap_save || save_and_prune_snap(pb,cfg);
+        overlay_show_toast(saved?"Screenshot copied":"Screenshot copied; could not save PNG");
 
         g_object_unref(pb);
 
@@ -2729,9 +1973,10 @@ static gboolean on_snap_timeout(gpointer user_data) {
             s_snap_revert_timer = g_timeout_add(1500, on_snap_revert_btn_label, NULL);
         }
     } else {
-        xutil_log("WINDOW", "Failed to capture screen pixbuf!");
+        xutil_log_err("WINDOW", "Capture unavailable or entirely black; clipboard unchanged");
+        overlay_show_toast("Screenshot unavailable or entirely black");
         if (s_snap_stack) {
-            gtk_stack_set_visible_child_name(GTK_STACK(s_snap_stack), "camera");
+            gtk_stack_set_visible_child_name(GTK_STACK(s_snap_stack), "failed");
         }
     }
 
@@ -2765,20 +2010,10 @@ void overlay_snap(void) {
 }
 
 void window_cleanup(void) {
-    if (s_ghost_countdown) { g_source_remove(s_ghost_countdown); s_ghost_countdown = 0; }
-    ghost_writer_cancel();
-    g_clear_pointer(&s_ghost_text_cache, g_free);
-    if (s_clock_timer_id > 0) {
-        g_source_remove(s_clock_timer_id);
-        s_clock_timer_id = 0;
-    }
+
     if (s_snap_revert_timer > 0) {
         g_source_remove(s_snap_revert_timer);
         s_snap_revert_timer = 0;
-    }
-    if (s_ghost_revert_timer > 0) {
-        g_source_remove(s_ghost_revert_timer);
-        s_ghost_revert_timer = 0;
     }
     if (s_toast_timer_id > 0) {
         g_source_remove(s_toast_timer_id);

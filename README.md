@@ -90,128 +90,115 @@ make && make install
 
 ---
 
-## ⭐ Major Features
+## Features and shortcuts — 1.4.1
 
-# 🛡️ NO FULL-SCREEN APP CAN STOP IT
-Cronq stays **on top of fullscreen games, fullscreen videos, and borderless-fullscreen apps**. It keeps itself above them and re-raises itself if something tries to bury it.
+Cronq contains Home and ChatGPT with a saved login. The standalone Browser and Ghost
+Typer are removed; Home shows a single centred ChatGPT launcher. Mouse click-through (Alt+G) stays.
 
-# 🎯 NEVER STEALS FOCUS
-Click, scroll and type in the overlay while your editor, game or terminal stays the active window.
+**Alt+M changes the typing destination.** Gray ball means your normal app receives
+text. Green glowing ball means only the overlay receives text. Your desktop app
+keeps OS focus. Alt+X hides the overlay while typing continues in the selected
+field, with no idle timeout. Alt+M, clicking outside, locking or resetting returns
+to normal. Enabling ghost mode sets opacity to 50%. The old Mirror/Exclusive modes are removed.
 
-# 👻 GHOST MODE (CLICK-THROUGH)
-Press **Alt + G** and every click passes straight through the overlay to whatever is behind it.
+| Shortcut | Action |
+| --- | --- |
+| Alt+X | Show / hide |
+| Alt+M | Normal app / overlay-only typing |
+| Alt+G | Mouse click-through |
+| Alt+A / Alt+S | Less / more opaque |
+| Alt+F | Fullscreen / restore |
+| Alt+D | Fit default dimensions to monitor work area |
+| Alt+P | Screenshot without overlay, to clipboard and saved PNG |
+| Alt+C | Solid / Camouflage |
+| Alt+T | Light / dark, or black / white Camouflage text |
+| Alt+Left / Alt+Right | Dock bottom-left / bottom-right and remember |
+| Alt+K | Hide and lock shortcuts |
+| Alt+K+X | Unlock and show |
+| Alt+Shift+K | Uninstall prompt: Enter removes Cronq and all data, Escape cancels |
 
-# ⌨️ GHOST TYPER (HUMAN-LIKE TYPING)
-Paste text, pick Slow / Moderate / Fast, press Start, and Cronq types it into the app you clicked, with human-like timing and optional "extra safe" typos that get corrected.
+While hidden, only show/hide, screenshot, lock/unlock and kill-switch shortcuts stay
+global. The kill prompt expires after 15 seconds visible or 5 seconds hidden.
+Alt+W is removed. Linux intentionally excludes Windows God-copy/God-paste and the
+Alt+O / Alt+Shift+O capture experiments.
 
-# 📸 CLEAN SCREENSHOTS
-**Alt + P** hides the overlay for a split second, captures the screen without it, saves the image and copies it to your clipboard.
+Appearance switches the native UI and ChatGPT together. Modes are Dark, Light,
+Camouflage black text (default) and Camouflage white text. The typing ball remains
+visible in Camouflage. Drag the top handle to move, double-click it to maximize
+height, and drag the lower-right corner to resize. Home is compact; ChatGPT expands
+within the monitor work area. Home centres the ChatGPT tile without extra labels or placeholder slots. The
+bottom bar has four evenly spaced controls: Back, Home, Reset and Snap. Reset retains your login.
 
-# 🌐 BUILT-IN MOBILE BROWSER + CHATGPT
-A phone-sized browser and ChatGPT, with logins that stay saved between sessions.
-
-# 🔍 SEE-THROUGH, RESIZABLE, MOVABLE
-Change opacity, drag it anywhere, resize it, or go fullscreen.
-
-# 🔒 PANIC BUTTONS *(Windows)*
-**Alt + K** instantly hides the overlay and locks all other shortcuts. **Alt + K + X** unlocks. **Alt + Shift + K** is a kill switch that removes Cronq from the PC after you confirm.
-
----
-
-## ⌨️ Shortcuts
-
-All shortcuts work globally while holding **Alt**.
-
-| Shortcut | What it does |
-| :--- | :--- |
-| **Alt + X** | Show / hide the overlay |
-| **Alt + G** | Ghost mode (click-through) on / off |
-| **Alt + A** / **Alt + S** | Less / more opaque |
-| **Alt + F** | Fullscreen on / off |
-| **Alt + D** | Back to default size (360×640) |
-| **Alt + P** | Clean screenshot |
-| **Alt + M** | Typing mode: Mirror ⇄ Exclusive |
-| **Alt + W** | Start / cancel Ghost Writer |
-| **Alt + C** | Camouflage on / off (transparent, text only) |
-| **Alt + T** | Text colour: black ⇄ white (Light ⇄ Dark when not camouflaged) |
-| **Alt + ←** / **Alt + →** | Dock bottom-left / bottom-right (remembered) |
-| **Alt + K** · **Alt + K + X** | Lock (hide + disable all shortcuts) · Unlock |
-| **Alt + Shift + K** | Kill switch: Enter removes Cronq and all its data, Esc cancels |
-
-**Appearance:** the top-left button cycles Dark → Light → Camo; the choice is saved under `[Appearance] mode` (0 Dark, 1 Light, 2 Camo black text *(default)*, 3 Camo white text). Camouflage needs a compositing window manager. Hiding the overlay from screen recorders is Windows-only: X11 has no per-window capture exclusion.
-
-**Mouse:** drag the top handle to move, drag the bottom-right corner (or edges on Windows) to resize. The bottom bar has Back, Home, Reset, Typer and Snap.
-
-**Command line**
 ```bash
-cronq            # open / bring to front
-cronq toggle     # show or hide
-cronq status     # current state
-cronq snap       # screenshot
-cronq kill       # quit
-cronq --help     # everything else
+cronq                     # open / bring up
+cronq --mode overlay      # route typing to overlay
+cronq --mode normal       # return typing to normal app
+cronq status              # visibility, destination, lock and appearance
+cronq snap                # screenshot
+cronq --version           # same version on Linux and Windows
+cronq update              # manual, verified stable-release update
+cronq kill                # clean exit
+cronq --help
 ```
 
-**Mirror vs Exclusive:** in *Mirror* your keystrokes go to both the overlay and the app behind it. In *Exclusive* they go only to the overlay.
+Linux requires Python3 for the optional updater. Release archives are built on
+Ubuntu24.04 (glibc2.39); use a source build on older distributions. An update does
+not change your saved login/settings. Failed processes recover with bounded
+backoff, and native crash reports retain the latest three files.
 
----
+## Configuration and data
 
-## 🧰 Tech Stack
-
-| | Linux | Windows |
-| :--- | :--- | :--- |
-| **Language** | C (GNU11) | C++17 |
-| **Window / UI** | GTK 3 + Cairo | Win32 |
-| **Browser engine** | WebKitGTK 4.1 | Microsoft Edge WebView2 |
-| **Stay-on-top, global keys** | X11 / Xlib, XInput2 | Win32 topmost + low-level keyboard hook |
-| **Click-through** | XShape | Win32 layered windows |
-| **Typing injection** | XTest | SendInput |
-| **Build** | Make | CMake, Inno Setup (installer) |
-| **CLI ↔ overlay** | Unix domain socket | Local IPC |
-
-Both versions follow one shared behavior spec: [shared/spec/behavior.md](shared/spec/behavior.md). Memory use is low (under about 60 MB on Linux).
-
----
-
-## ⚠️ What It Can't Do
-
-- **Wayland:** pure Wayland blocks global shortcuts, click-through and always-on-top. Use an X11 session.
-- **Exclusive-fullscreen / kernel anti-cheat games:** apps that take over the display exclusively, and games with kernel-level protection, can still hide it.
-- **Complex IMEs** (e.g. Japanese, Chinese candidate popups) may need *Exclusive* mode.
-- **Phone-sensor checks:** sites that test for real phone hardware can tell it is an embedded browser.
-
----
-
-## ⚙️ Configuration
-
-Linux: `~/.config/cronq/config.ini` · Windows: `%APPDATA%\cronq\config.ini`
+Linux settings: `~/.config/cronq/config.ini`, data/login/screenshots:
+`~/.local/share/cronq/` (XDG overrides supported). Windows settings:
+`%APPDATA%\cronq\config.ini`. Existing Linux profile paths are retained.
 
 ```ini
 [General]
 width = 360
 height = 640
-corner = bottom-left      # bottom-left, bottom-right, top-left, top-right
-opacity = 0.98
+margin = 12
+corner = bottom-left
+monitor = primary
+opacity = 1.0
 start_visible = false
-default_key_mode = mirror # mirror or exclusive
-
-[Browser]
-home_url = https://html5test.com
-search_url_template = https://duckduckgo.com/?q=%s
 
 [Hotkeys]
 toggle_key = x
+mode_key = m
 ghost_key = g
 snap_key = p
-mode_key = m
-ghost_writer_key = w
+
+[Appearance]
+mode = 2
+
+[Snap]
+snap_scope = monitor
+snap_delay_ms = 80
+snap_save = true
+snap_keep_count = 20
 ```
-Apply changes without restarting (Linux): `cronq --reload-config`.
 
----
+Apply changes with `cronq --reload-config`. The optional `[ChatGPT] allowlist`
+controls permitted authentication/navigation hosts; legacy ChatGPT allowlists
+are retained. Old Browser, GhostWriter and default-key-mode settings are ignored.
 
-## 🧪 Development
+## Platform limits and development
 
-- Linux tests live in [tests/](tests/) (for example `bash tests/test_ghost_page.sh` in a dedicated X11 test display such as Xephyr).
-- Windows details, test checklist and parity report: [windows/README.md](windows/README.md), [windows/PARITY.md](windows/PARITY.md).
-- History: [DEVLOG.md](DEVLOG.md).
+Linux requires X11 and a compositor for transparent Camouflage. X11 offers no
+secure per-window capture exclusion: the existing capture guard hides after
+capture is detected, with a possible first-frame gap. Keyboard grabs keep OS focus
+in the normal app, but X11 clients can detect grab notifications; held keys across
+a toggle, complex IMEs and raw-input games need desktop-specific testing.
+Windows uses WebView2 and its native capture/input APIs. Live login/file upload,
+protected capture and secure/elevated apps require actual platform testing.
+
+Build Linux with `make`. `make test` runs real WebKitGTK/X11 tests on a disposable
+Xephyr display/profile, plus CLI, screenshot, crash and updater checks. Test
+requirements include Xephyr, dbus-run-session, xdotool and xsetroot; a parent
+X display is required (`xvfb-run -a make test` works in CI). No test confirms the
+kill switch or changes your installed app. Linux release packaging:
+`bash scripts/make-linux-dist.sh`.
+
+See the [shared behavior contract](shared/spec/behavior.md),
+[Linux parity report](LINUX_PARITY.md), and
+[Windows verification report](windows/PARITY.md) for evidence and platform differences.

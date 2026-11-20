@@ -1,9 +1,8 @@
 #include "input.h"
 #include "window.h"
-#include "browser.h"
+#include "chat_view.h"
 #include "hotkey.h"
 #include "config.h"
-#include "ghost.h"
 #include "xutil.h"
 
 #include <gdk/gdk.h>
@@ -15,122 +14,51 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define IDLE_TIMEOUT_SECONDS 60
 #define POINTER_FALLBACK_MS  35
 
-static KeyMode      s_key_mode = KEY_MODE_MIRROR;
 static TypingTarget s_typing_target = TYPING_TARGET_NONE;
 static GhostMode    s_ghost_mode = GHOST_MODE_OFF;
 static GrabStatus   s_grab_status = GRAB_STATUS_NONE;
 
-static guint        s_idle_timer_id = 0;
 static guint        s_fallback_timer_id = 0;
 static gint64       s_last_native_click_time = 0;
 static int          s_pending_fallback_button = 0;
 static int          s_pending_fallback_root_x = 0;
 static int          s_pending_fallback_root_y = 0;
 
-static void acquire_exclusive_grab(void);
-static void release_exclusive_grab(void);
-static void restart_idle_timer(void);
-
 gboolean input_init(void) {
-    s_key_mode = KEY_MODE_MIRROR;
     s_typing_target = TYPING_TARGET_NONE;
     s_ghost_mode = GHOST_MODE_OFF;
     s_grab_status = GRAB_STATUS_NONE;
-    s_idle_timer_id = 0;
     s_fallback_timer_id = 0;
     s_last_native_click_time = 0;
 
-    xutil_log("INPUT", "Input subsystem initialized (Default: MIRROR mode, SOLID, typing target: NONE).");
+    xutil_log("INPUT", "Input subsystem initialized (normal application typing, SOLID).");
     return TRUE;
 }
 
-static gboolean on_idle_timeout(gpointer user_data) {
-    (void)user_data;
-    xutil_log("INPUT", "60-second idle timeout expired. Releasing typing target and grabs.");
-    s_idle_timer_id = 0;
-    input_set_typing_target(TYPING_TARGET_NONE);
-    return G_SOURCE_REMOVE;
+void input_toggle_typing_target(void) {
+    input_set_typing_target(s_typing_target==TYPING_TARGET_OVERLAY?TYPING_TARGET_NONE:TYPING_TARGET_OVERLAY);
 }
-
-static void restart_idle_timer(void) {
-    if (s_idle_timer_id > 0) {
-        g_source_remove(s_idle_timer_id);
-    }
-    s_idle_timer_id = g_timeout_add_seconds(IDLE_TIMEOUT_SECONDS, on_idle_timeout, NULL);
-}
-
-KeyMode input_get_key_mode(void) {
-    return s_key_mode;
-}
-
-void input_set_key_mode(KeyMode mode) {
-    if (s_key_mode == mode) return;
-    s_key_mode = mode;
-    xutil_log("INPUT", "Key mode set to: %s", mode == KEY_MODE_EXCLUSIVE ? "EXCLUSIVE" : "MIRROR");
-
-    if (mode == KEY_MODE_EXCLUSIVE) {
-        if (s_typing_target == TYPING_TARGET_OVERLAY) {
-            acquire_exclusive_grab();
-        }
-    } else {
-        if (s_grab_status == GRAB_STATUS_ACTIVE) {
-            release_exclusive_grab();
-        }
-    }
-    overlay_queue_draw();
-}
-
-void input_cycle_key_mode(void) {
-    if (s_key_mode == KEY_MODE_MIRROR) {
-        input_set_key_mode(KEY_MODE_EXCLUSIVE);
-    } else {
-        input_set_key_mode(KEY_MODE_MIRROR);
-    }
-}
-
-TypingTarget input_get_typing_target(void) {
-    return s_typing_target;
-}
-
+TypingTarget input_get_typing_target(void) { return s_typing_target; }
 void input_set_typing_target(TypingTarget target) {
-    if (s_typing_target == target) return;
-    s_typing_target = target;
-    xutil_log("INPUT", "Typing target set to: %s", target == TYPING_TARGET_OVERLAY ? "OVERLAY" : "NONE");
-
-    if (target == TYPING_TARGET_OVERLAY) {
-        const AppConfig *cfg = config_get();
-        if (cfg && cfg->shield_clipboard_keys) {
-            hotkey_install_clipboard_shield();
+    if (target==TYPING_TARGET_OVERLAY && (!overlay_is_visible() || hotkey_is_locked())) return;
+    if (target==s_typing_target) return;
+    if (target==TYPING_TARGET_OVERLAY) {
+        if (!hotkey_capture_keyboard()) {
+            s_grab_status=GRAB_STATUS_FAILED;
+            overlay_show_toast("Keyboard capture unavailable; typing stays in your app");
+            overlay_queue_draw();return;
         }
-        if (s_key_mode == KEY_MODE_EXCLUSIVE) {
-            acquire_exclusive_grab();
-        }
-        restart_idle_timer();
-
+        s_grab_status=GRAB_STATUS_ACTIVE;s_typing_target=target;
         overlay_set_active_focus(TRUE);
-
-        GtkWidget *win = overlay_get_window_widget();
-        GtkWidget *cur = win ? gtk_window_get_focus(GTK_WINDOW(win)) : NULL;
-        if (!cur) {
-            GtkWidget *test_entry = overlay_get_test_entry();
-            if (test_entry) {
-                gtk_widget_grab_focus(test_entry);
-            }
-        }
+        chat_view_prepare_typing();
     } else {
+        s_typing_target=TYPING_TARGET_NONE;
+        hotkey_release_keyboard();s_grab_status=GRAB_STATUS_NONE;
         overlay_set_active_focus(FALSE);
-        hotkey_remove_clipboard_shield();
-        if (s_grab_status == GRAB_STATUS_ACTIVE) {
-            release_exclusive_grab();
-        }
-        if (s_idle_timer_id > 0) {
-            g_source_remove(s_idle_timer_id);
-            s_idle_timer_id = 0;
-        }
     }
+    xutil_log("INPUT","Typing target: %s",s_typing_target==TYPING_TARGET_OVERLAY?"OVERLAY":"NORMAL");
     overlay_queue_draw();
 }
 
@@ -147,9 +75,11 @@ void input_set_ghost_mode(GhostMode ghost) {
         if (s_typing_target == TYPING_TARGET_OVERLAY) {
             input_set_typing_target(TYPING_TARGET_NONE);
         }
+        overlay_set_opacity(0.50);
         overlay_set_ghost(TRUE);
     } else {
         xutil_log("INPUT", "Ghost mode DISABLED (solid overlay restored).");
+        overlay_set_opacity(1.0);
         overlay_set_ghost(FALSE);
     }
     overlay_queue_draw();
@@ -167,46 +97,7 @@ GrabStatus input_get_grab_status(void) {
     return s_grab_status;
 }
 
-static void acquire_exclusive_grab(void) {
-    Window xid = overlay_get_xid();
-    if (xid == None) return;
-
-    Display *xdpy = gdk_x11_display_get_xdisplay(gdk_display_get_default());
-    int ret = XGrabKeyboard(xdpy, xid, False, GrabModeAsync, GrabModeAsync, CurrentTime);
-    XFlush(xdpy);
-
-    if (ret == GrabSuccess) {
-        s_grab_status = GRAB_STATUS_ACTIVE;
-        xutil_log("INPUT", "Exclusive keyboard grab ACQUIRED on overlay XID 0x%lx.", (unsigned long)xid);
-        restart_idle_timer();
-    } else {
-        s_grab_status = GRAB_STATUS_FAILED;
-        xutil_log_err("INPUT", "Exclusive keyboard grab FAILED (code=%d, e.g. AlreadyGrabbed). Falling back to MIRROR.", ret);
-    }
-    overlay_queue_draw();
-}
-
-static void release_exclusive_grab(void) {
-    if (s_grab_status == GRAB_STATUS_ACTIVE) {
-        Display *xdpy = gdk_x11_display_get_xdisplay(gdk_display_get_default());
-        XUngrabKeyboard(xdpy, CurrentTime);
-        XFlush(xdpy);
-        s_grab_status = GRAB_STATUS_NONE;
-        xutil_log("INPUT", "Exclusive keyboard grab RELEASED.");
-    } else if (s_grab_status == GRAB_STATUS_FAILED) {
-        s_grab_status = GRAB_STATUS_NONE;
-    }
-
-    if (s_idle_timer_id > 0) {
-        g_source_remove(s_idle_timer_id);
-        s_idle_timer_id = 0;
-    }
-    overlay_queue_draw();
-}
-
-void input_release_grab(void) {
-    release_exclusive_grab();
-}
+void input_release_grab(void) { input_set_typing_target(TYPING_TARGET_NONE); }
 
 void input_notify_native_click(GdkEventButton *event) {
     (void)event;
@@ -217,18 +108,14 @@ void input_notify_native_click(GdkEventButton *event) {
         s_fallback_timer_id = 0;
     }
 
-    if (s_ghost_mode == GHOST_MODE_ON) return;
-
-    input_set_typing_target(TYPING_TARGET_OVERLAY);
-    overlay_set_active_focus(TRUE);
-    restart_idle_timer();
 }
 
 void input_notify_overlay_hidden(void) {
-    hotkey_remove_clipboard_shield();
-    input_set_typing_target(TYPING_TARGET_NONE);
-    overlay_set_active_focus(FALSE);
-    release_exclusive_grab();
+    /* Visibility is independent of the explicitly selected typing destination. */
+    if (s_fallback_timer_id) {
+        g_source_remove(s_fallback_timer_id);
+        s_fallback_timer_id = 0;
+    }
 }
 
 static gboolean on_pointer_fallback_check(gpointer user_data) {
@@ -245,48 +132,10 @@ static gboolean on_pointer_fallback_check(gpointer user_data) {
         int rel_x = s_pending_fallback_root_x - ox;
         int rel_y = s_pending_fallback_root_y - oy;
 
-        GtkWidget *target_widget = NULL;
-        int target_x = rel_x;
-        int target_y = rel_y;
-
-        const char *curr_app = overlay_get_current_app();
-        bool is_chatgpt = (curr_app && g_ascii_strcasecmp(curr_app, "chatgpt") == 0);
-
-        if (overlay_has_popup_modal()) {
-            if (rel_y < 65) {
-                target_widget = overlay_get_window_widget();
-            } else {
-                target_widget = overlay_get_popup_child_view();
-                target_y = rel_y - 65;
-            }
-        } else if (rel_y >= oh - 80 && rel_y <= oh - 40) {
-            /* Test input entry area */
-            target_widget = overlay_get_test_entry();
-            target_y = rel_y - (oh - 80);
-        } else if (rel_y > oh - 40) {
-            /* Bottom controls */
-            target_widget = overlay_get_window_widget();
-        } else if (is_chatgpt) {
-            if (rel_y < 28) {
-                /* Top status bar */
-                target_widget = overlay_get_window_widget();
-            } else {
-                /* ChatGPT center viewport (starts immediately under status bar) */
-                target_widget = GTK_WIDGET(browser_get_active_view());
-                target_y = rel_y - 28;
-            }
-        } else if (rel_y < 70) {
-            /* Top area: URL entry if in browser */
-            target_widget = overlay_get_url_entry();
-            if (!target_widget || !gtk_widget_is_visible(target_widget)) {
-                target_widget = overlay_get_test_entry();
-            }
-            target_y = (rel_y > 28) ? (rel_y - 28) : rel_y;
-        } else {
-            /* Center viewport */
-            target_widget = GTK_WIDGET(browser_get_active_view());
-            target_y = rel_y - 70;
-        }
+        GtkWidget *target_widget=overlay_has_popup_modal()?overlay_get_popup_child_view():GTK_WIDGET(chat_view_get_active_view());
+        if(!target_widget) target_widget=overlay_get_window_widget();
+        int target_x=rel_x,target_y=rel_y;
+        gtk_widget_translate_coordinates(overlay_get_window_widget(),target_widget,rel_x,rel_y,&target_x,&target_y);
 
         if (target_widget && gtk_widget_get_window(target_widget)) {
             GdkDisplay *display = gdk_display_get_default();
@@ -327,8 +176,6 @@ static gboolean on_pointer_fallback_check(gpointer user_data) {
             gtk_widget_grab_focus(target_widget);
         }
 
-        input_set_typing_target(TYPING_TARGET_OVERLAY);
-        restart_idle_timer();
     }
     return G_SOURCE_REMOVE;
 }
@@ -337,13 +184,10 @@ void input_handle_raw_button(int button, bool is_press, int root_x, int root_y) 
     int ox, oy, ow, oh;
     overlay_get_geometry(&ox, &oy, &ow, &oh);
 
-    bool is_inside = (root_x >= ox && root_x < ox + ow &&
+    bool is_inside = overlay_is_visible() && s_ghost_mode == GHOST_MODE_OFF && (root_x >= ox && root_x < ox + ow &&
                       root_y >= oy && root_y < oy + oh);
 
     if (is_inside) {
-        if (s_ghost_mode == GHOST_MODE_ON) {
-            return;
-        }
 
         if (is_press) {
             if (button >= 1 && button <= 3) {
@@ -356,9 +200,7 @@ void input_handle_raw_button(int button, bool is_press, int root_x, int root_y) 
                 }
             }
 
-            input_set_typing_target(TYPING_TARGET_OVERLAY);
-            restart_idle_timer();
-        }
+            }
     } else {
         if (is_press && button >= 1 && button <= 3) {
             input_set_typing_target(TYPING_TARGET_NONE);
@@ -384,14 +226,12 @@ static GdkModifierType get_current_modifiers(void) {
 }
 
 void input_handle_raw_key(int keycode, bool is_press) {
-    if (ghost_is_guard_active()) return;
 
     /* If typing target is not overlay, keys go only to the focused desktop app */
     if (s_typing_target != TYPING_TARGET_OVERLAY) {
         return;
     }
 
-    restart_idle_timer();
 
     /* Find target widget: check focused widget in overlay window */
     GtkWidget *target = NULL;
@@ -403,13 +243,13 @@ void input_handle_raw_key(int keycode, bool is_press) {
         }
     }
     if (!target) {
-        target = overlay_get_test_entry();
+        target = GTK_WIDGET(chat_view_get_active_view());
     }
     if (!target) {
-        target = overlay_get_entry_widget();
+        target = GTK_WIDGET(chat_view_get_active_view());
     }
     if (!target || !gtk_widget_get_window(target)) {
-        target = GTK_WIDGET(browser_get_active_view());
+        target = GTK_WIDGET(chat_view_get_active_view());
     }
     if (!target || !gtk_widget_get_window(target)) {
         return;
@@ -424,7 +264,7 @@ void input_handle_raw_key(int keycode, bool is_press) {
 
     if (keyval == 0) return;
 
-    /* Don't send solitary modifier key releases to entry/browser */
+    /* Don't send solitary modifier key releases to native control / ChatGPT */
     if (keyval == GDK_KEY_Control_L || keyval == GDK_KEY_Control_R ||
         keyval == GDK_KEY_Shift_L   || keyval == GDK_KEY_Shift_R ||
         keyval == GDK_KEY_Alt_L     || keyval == GDK_KEY_Alt_R ||
@@ -461,8 +301,9 @@ void input_handle_raw_key(int keycode, bool is_press) {
 
     gtk_widget_event(target, ev);
     gdk_event_free(ev);
-
-    overlay_update_status_ui();
+    /* Routing a key does not change the typing target or status indicators.
+     * Their transition handlers update the UI; rebuilding them here invalidates
+     * GTK styles and writes X11 properties twice for every typed character. */
 }
 
 void input_cleanup(void) {
@@ -470,11 +311,6 @@ void input_cleanup(void) {
         g_source_remove(s_fallback_timer_id);
         s_fallback_timer_id = 0;
     }
-    if (s_idle_timer_id > 0) {
-        g_source_remove(s_idle_timer_id);
-        s_idle_timer_id = 0;
-    }
-    hotkey_remove_clipboard_shield();
-    release_exclusive_grab();
+    input_release_grab();
     xutil_log("INPUT", "Input subsystem cleaned up.");
 }

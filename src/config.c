@@ -19,13 +19,7 @@ static void set_defaults(AppConfig *cfg) {
     g_strlcpy(cfg->monitor, "primary", sizeof(cfg->monitor));
     cfg->opacity = 1.0;
     cfg->start_visible = false;
-    cfg->default_key_mode = KEY_MODE_MIRROR;
 
-    g_strlcpy(cfg->home_url, "https://html5test.com", sizeof(cfg->home_url));
-    g_strlcpy(cfg->search_url_template, "https://duckduckgo.com/?q=%s", sizeof(cfg->search_url_template));
-    g_strlcpy(cfg->user_agent,
-              "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36",
-              sizeof(cfg->user_agent));
     g_strlcpy(cfg->chatgpt_allowlist,
               "chatgpt.com,openai.com,oaistatic.com,oaiusercontent.com,auth0.com,google.com,google.co.in,gstatic.com,googleusercontent.com,googleapis.com,recaptcha.net,cloudflare.com,challenges.cloudflare.com,microsoft.com,microsoftonline.com,live.com,msftauth.net,apple.com",
               sizeof(cfg->chatgpt_allowlist));
@@ -41,14 +35,8 @@ static void set_defaults(AppConfig *cfg) {
     cfg->snap_save = true;
     cfg->snap_keep_count = 20;
 
-    cfg->ghost_writer_key = 'w';
-    cfg->ghost_delay_ms = 0;
-    g_strlcpy(cfg->ghost_newline, "space", sizeof(cfg->ghost_newline));
-    g_strlcpy(cfg->ghost_tab, "space", sizeof(cfg->ghost_tab));
-    cfg->ghost_max_chars = 100000;
-
     cfg->hide_from_capture = true;
-    cfg->appearance_mode = -1;   /* auto: camouflage, text colour follows the system theme */
+    cfg->appearance_mode = 2;
 }
 
 static void create_default_config_file(const char *path) {
@@ -65,13 +53,6 @@ static void create_default_config_file(const char *path) {
         "monitor = primary\n"
         "opacity = 1.0\n"
         "start_visible = false\n"
-        "# Options: mirror, exclusive\n"
-        "default_key_mode = mirror\n"
-        "\n"
-        "[Browser]\n"
-        "home_url = https://html5test.com\n"
-        "search_url_template = https://duckduckgo.com/?q=%s\n"
-        "user_agent = Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36\n"
         "\n"
         "[Hotkeys]\n"
         "# Shortcuts combine Alt + <key> (Alt+X=Toggle, Alt+G=Ghost, Alt+A/S=Opacity, Alt+F=Fullscreen, Alt+D=DefaultSize, Alt+P=Snap)\n"
@@ -79,22 +60,13 @@ static void create_default_config_file(const char *path) {
         "mode_key = m\n"
         "ghost_key = g\n"
         "snap_key = p\n"
-        "ghost_writer_key = w\n"
         "\n"
         "[Snap]\n"
         "# Options: monitor (primary), all (all screens)\n"
         "snap_scope = monitor\n"
         "snap_delay_ms = 80\n"
         "snap_save = true\n"
-        "snap_keep_count = 20\n"
-        "\n"
-        "[GhostWriter]\n"
-        "ghost_delay_ms = 0\n"
-        "# Options: space, return, skip\n"
-        "ghost_newline = space\n"
-        "# Options: space, tab, skip\n"
-        "ghost_tab = space\n"
-        "ghost_max_chars = 100000\n";
+        "snap_keep_count = 20\n";
 
     char *dir = g_path_get_dirname(path);
     g_mkdir_with_parents(dir, 0755);
@@ -147,40 +119,8 @@ static void load_from_key_file(GKeyFile *kf, AppConfig *cfg) {
     if (!err) cfg->start_visible = sv ? true : false;
     g_clear_error(&err);
 
-    char *km = g_key_file_get_string(kf, "General", "default_key_mode", &err);
-    if (!err && km) {
-        if (g_ascii_strcasecmp(km, "exclusive") == 0) {
-            cfg->default_key_mode = KEY_MODE_EXCLUSIVE;
-        } else {
-            cfg->default_key_mode = KEY_MODE_MIRROR;
-        }
-        g_free(km);
-    }
-    g_clear_error(&err);
-
-    /* [Browser] */
-    char *home = g_key_file_get_string(kf, "Browser", "home_url", &err);
-    if (!err && home && strlen(home) > 0) {
-        g_strlcpy(cfg->home_url, home, sizeof(cfg->home_url));
-        g_free(home);
-    }
-    g_clear_error(&err);
-
-    char *search = g_key_file_get_string(kf, "Browser", "search_url_template", &err);
-    if (!err && search && strlen(search) > 0) {
-        g_strlcpy(cfg->search_url_template, search, sizeof(cfg->search_url_template));
-        g_free(search);
-    }
-    g_clear_error(&err);
-
-    char *ua = g_key_file_get_string(kf, "Browser", "user_agent", &err);
-    if (!err && ua && strlen(ua) > 0) {
-        g_strlcpy(cfg->user_agent, ua, sizeof(cfg->user_agent));
-        g_free(ua);
-    }
-    g_clear_error(&err);
-
-    char *al = g_key_file_get_string(kf, "Browser", "chatgpt_allowlist", &err);
+    char *al = g_key_file_get_string(kf, "ChatGPT", "allowlist", &err);
+    if(err) { g_clear_error(&err);al=g_key_file_get_string(kf,"Browser","chatgpt_allowlist",&err); }
     if (!err && al && strlen(al) > 0) {
         g_strlcpy(cfg->chatgpt_allowlist, al, sizeof(cfg->chatgpt_allowlist));
         g_free(al);
@@ -252,38 +192,6 @@ static void load_from_key_file(GKeyFile *kf, AppConfig *cfg) {
     }
     g_clear_error(&err);
 
-    /* [GhostWriter] */
-    char *gwk = g_key_file_get_string(kf, "Hotkeys", "ghost_writer_key", &err);
-    if (err) {
-        g_clear_error(&err);
-        gwk = g_key_file_get_string(kf, "GhostWriter", "ghost_writer_key", &err);
-    }
-    if (!err && gwk && strlen(gwk) > 0) {
-        cfg->ghost_writer_key = gwk[0];
-        g_free(gwk);
-    }
-    g_clear_error(&err);
-
-    int gdelay = g_key_file_get_integer(kf, "GhostWriter", "ghost_delay_ms", &err);
-    if (!err && gdelay >= 0 && gdelay <= 5000) {
-        cfg->ghost_delay_ms = gdelay;
-    }
-    g_clear_error(&err);
-
-    char *gnewline = g_key_file_get_string(kf, "GhostWriter", "ghost_newline", &err);
-    if (!err && gnewline && strlen(gnewline) > 0) {
-        g_strlcpy(cfg->ghost_newline, gnewline, sizeof(cfg->ghost_newline));
-        g_free(gnewline);
-    }
-    g_clear_error(&err);
-
-    char *gtab = g_key_file_get_string(kf, "GhostWriter", "ghost_tab", &err);
-    if (!err && gtab && strlen(gtab) > 0) {
-        g_strlcpy(cfg->ghost_tab, gtab, sizeof(cfg->ghost_tab));
-        g_free(gtab);
-    }
-    g_clear_error(&err);
-
     int amode = g_key_file_get_integer(kf, "Appearance", "mode", &err);
     if (!err && amode >= 0 && amode <= 3) cfg->appearance_mode = amode;
     g_clear_error(&err);
@@ -292,11 +200,6 @@ static void load_from_key_file(GKeyFile *kf, AppConfig *cfg) {
     if (!err) cfg->hide_from_capture = hfc;
     g_clear_error(&err);
 
-    int gmax = g_key_file_get_integer(kf, "GhostWriter", "ghost_max_chars", &err);
-    if (!err && gmax >= 0 && gmax <= 5000000) {
-        cfg->ghost_max_chars = gmax;
-    }
-    g_clear_error(&err);
 }
 
 bool config_init(void) {
@@ -313,8 +216,8 @@ bool config_init(void) {
     GError *err = NULL;
     if (g_key_file_load_from_file(kf, s_config_path, G_KEY_FILE_NONE, &err)) {
         load_from_key_file(kf, &s_config);
-        xutil_log("CONFIG", "Loaded configuration from '%s' (%dx%d, corner=%s, monitor=%s, home='%s').",
-                  s_config_path, s_config.width, s_config.height, s_config.corner, s_config.monitor, s_config.home_url);
+        xutil_log("CONFIG", "Loaded configuration from '%s' (%dx%d, corner=%s, monitor=%s).",
+                  s_config_path, s_config.width, s_config.height, s_config.corner, s_config.monitor);
     } else {
         xutil_log_err("CONFIG", "Failed to load config '%s': %s. Using defaults.", s_config_path, err->message);
         g_error_free(err);

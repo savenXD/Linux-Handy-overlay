@@ -18,6 +18,7 @@ bool IsModifier(unsigned vk) {
 
 Action Evaluate(unsigned vk, bool down, bool wasDown, unsigned mods, bool kHeld, bool xHeld,
                 const State& s) {
+    if (down && s.killPending && vk == kVkEscape) return Action::KillCancel;
     if (!down || wasDown) return Action::None;  // key-up and auto-repeat never trigger anything
 
     // The confirmation owns Enter / Esc while it is armed; any other key cancels it, so ordinary

@@ -1,6 +1,5 @@
 #include "god_copy.h"
 #include "god_copy_protocol.h"
-#include "ghost.h"
 #include "hotkey.h"
 #include "overlay.h"
 #include <vector>
@@ -130,8 +129,8 @@ void CALLBACK Tick(HWND, UINT, UINT_PTR, DWORD) {
         return;
     }
     if (!g_pasting) return;
-    if (!TargetUnchanged() || ghost::IsTyping()) {
-        Fail("God-paste stopped: focus changed or another writer started"); return;
+    if (!TargetUnchanged()) {
+        Fail("God-paste stopped: focus changed"); return;
     }
     if (GetAsyncKeyState(VK_ESCAPE) & 0x8000) { Fail("God-paste cancelled"); return; }
     if (ModifiersHeld()) {
@@ -172,7 +171,7 @@ void CALLBACK Tick(HWND, UINT, UINT_PTR, DWORD) {
 }
 bool StartTimer() { return SetTimer(overlay::Hwnd(), kTimer, 15, Tick) != 0; }
 bool Busy() {
-    if (g_process || g_pasting || g_clipboardDeadline || ghost::IsTyping() || ghost::IsGuardActive()) {
+    if (g_process || g_pasting || g_clipboardDeadline) {
         overlay::ShowToast("God-copy: wait for the current operation to finish");
         return true;
     }

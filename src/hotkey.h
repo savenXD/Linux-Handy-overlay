@@ -9,11 +9,8 @@ gboolean        hotkey_init(void);
 void            hotkey_cleanup(void);
 void            hotkey_reload_grabs(void);
 
-void            hotkey_install_clipboard_shield(void);
-void            hotkey_remove_clipboard_shield(void);
-bool            hotkey_is_clipboard_shield_active(void);
-void            hotkey_drain_pending_events(void);
-void            hotkey_sync_raw_modifiers(void);
+bool            hotkey_capture_keyboard(void);
+void            hotkey_release_keyboard(void);
 GdkModifierType hotkey_get_active_modifiers(void);
 
 /* Lock: hides the overlay and disables every hotkey except Alt+K, Alt+X (unlock chord) and Alt+Shift+K. */

@@ -12,10 +12,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define TOKEN_RATE       300.0   /* max raises per second */
-#define TOKEN_BURST      60.0    /* max burst allowance */
-#define COOLDOWN_USEC    50000   /* 50 ms cooldown when tripped */
-#define COOLDOWN_MS      50      /* 50 ms timer */
+#define TOKEN_RATE       60.0   /* max raises per second */
+#define TOKEN_BURST      20.0    /* max burst allowance */
+#define COOLDOWN_USEC    3000000 /* 3 s cooldown when tripped */
+#define COOLDOWN_MS      3000    /* 3 s timer */
 #define WATCHDOG_MS      100     /* 100 ms safety polling */
 
 static Display   *s_raise_dpy = NULL;
@@ -71,28 +71,6 @@ static bool token_bucket_consume(void) {
 static void log_offending_window(Window offender) {
     if (!s_raise_dpy || offender == None) return;
 
-    char *win_name = NULL;
-    Atom net_wm_name = XInternAtom(s_raise_dpy, "_NET_WM_NAME", False);
-    Atom utf8_string = XInternAtom(s_raise_dpy, "UTF8_STRING", False);
-    Atom actual_type;
-    int actual_format;
-    unsigned long nitems, bytes_after;
-    unsigned char *prop = NULL;
-
-    if (XGetWindowProperty(s_raise_dpy, offender, net_wm_name, 0, 1024, False, utf8_string,
-                           &actual_type, &actual_format, &nitems, &bytes_after, &prop) == Success && prop) {
-        win_name = strdup((char *)prop);
-        XFree(prop);
-    } else {
-        char *legacy_name = NULL;
-        if (XFetchName(s_raise_dpy, offender, &legacy_name) && legacy_name) {
-            win_name = strdup(legacy_name);
-            XFree(legacy_name);
-        } else {
-            win_name = strdup("<unnamed>");
-        }
-    }
-
     XClassHint hint;
     memset(&hint, 0, sizeof(hint));
     XGetClassHint(s_raise_dpy, offender, &hint);
@@ -101,9 +79,8 @@ static void log_offending_window(Window offender) {
     memset(&attr, 0, sizeof(attr));
     XGetWindowAttributes(s_raise_dpy, offender, &attr);
 
-    xutil_log("LOOP_GUARD", "Offending window: XID=0x%lx, Name='%s', WM_CLASS='%s'/'%s', OverrideRedirect=%s, Geom=%dx%d+%d+%d",
+    xutil_log("LOOP_GUARD", "Offending window: XID=0x%lx, WM_CLASS='%s'/'%s', OverrideRedirect=%s, Geom=%dx%d+%d+%d",
               (unsigned long)offender,
-              win_name ? win_name : "<unknown>",
               hint.res_name ? hint.res_name : "none",
               hint.res_class ? hint.res_class : "none",
               attr.override_redirect ? "YES" : "NO",
@@ -111,7 +88,6 @@ static void log_offending_window(Window offender) {
 
     if (hint.res_name) XFree(hint.res_name);
     if (hint.res_class) XFree(hint.res_class);
-    if (win_name) free(win_name);
 }
 
 static void check_and_raise(void) {

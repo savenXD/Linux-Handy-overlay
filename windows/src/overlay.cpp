@@ -1,12 +1,11 @@
 #include "overlay.h"
 
 #include "app.h"
-#include "browser.h"
+#include "chat_view.h"
 #include "ui_bridge.h"
 #include "jsonlite.h"
 #include "config.h"
 #include "geometry.h"
-#include "ghost.h"
 #include "god_copy.h"
 #include "hotkey.h"
 #include "input.h"
@@ -31,6 +30,7 @@ constexpr DWORD kAffinityExclude = 0x00000011;  // WDA_EXCLUDEFROMCAPTURE
 const wchar_t* const kClassName = L"CronqOverlayWindow";
 constexpr UINT_PTR kToastTimerId = 1;
 constexpr UINT_PTR kDragTimerId = 2;
+constexpr UINT_PTR kTypingHoverTimerId = 3;
 constexpr UINT kToastMs = 2200;
 
 HWND g_hwnd = nullptr;
@@ -150,7 +150,7 @@ void ApplyGeometry() {
     if (!g_hwnd) return;
     SetWindowPos(g_hwnd, nullptr, g_x, g_y, g_w, g_h, SWP_NOACTIVATE | SWP_NOZORDER);
     hotkey::UpdateOverlayRect(g_x, g_y, g_x + g_w, g_y + g_h);
-    browser::ResizeHost();
+    chat_view::ResizeHost();
 }
 
 void ApplyAlpha() {
@@ -170,7 +170,7 @@ void MoveTo(int x, int y) {
     if (g_hwnd) {
         SetWindowPos(g_hwnd, nullptr, g_x, g_y, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOZORDER);
         hotkey::UpdateOverlayRect(g_x, g_y, g_x + g_w, g_y + g_h);
-        browser::ResizeHost();
+        chat_view::ResizeHost();
     }
 }
 
@@ -255,6 +255,8 @@ int HitTest(int x, int y, int* edgeMask) {
     RECT rc;
     GetClientRect(g_hwnd, &rc);
     Layout lay = MakeLayout(rc.right, rc.bottom);
+    if (theme::IsCamouflage() && In(R(rc.right-S(34), S(6), rc.right-S(14), S(26)),x,y))
+        return HitPillMode;
 
     if (In(lay.btnClose, x, y)) return HitClose;
     if (In(lay.btnFull, x, y)) return HitFull;
@@ -341,9 +343,17 @@ void Paint(HDC wndDc) {
         RECT rc; GetClientRect(g_hwnd,&rc);
         auto bg=theme::Get().background;
         HBRUSH key=CreateSolidBrush(RGB(bg.r,bg.g,bg.b)); FillRect(wndDc,&rc,key); DeleteObject(key);
+        if (!chat_view::IsUiVisible()) {
+            const bool typing = input::GetTypingTarget() == input::TypingTarget::Overlay &&
+                                input::GetGrabStatus() == input::GrabStatus::Active;
+            const int cx = rc.right - S(24), cy = S(16), d = S(10);
+            if (typing) FillRound(wndDc, R(cx-d,cy-d,cx+d,cy+d), d, RGB(20,100,50));
+            FillRound(wndDc, R(cx-d/2,cy-d/2,cx+d/2,cy+d/2), d/2,
+                      typing ? RGB(34,197,94) : RGB(115,115,115));
+        }
         return;
     }
-    if (browser::IsUiVisible()) return;
+    if (chat_view::IsUiVisible()) return;
     RECT rc;
     GetClientRect(g_hwnd, &rc);
     int w = rc.right, h = rc.bottom;
@@ -373,10 +383,11 @@ void Paint(HDC wndDc) {
     HFONT fTitle = MakeFont(20, FW_BOLD);
 
     // Status pills
-    bool excl = input::GetKeyMode() == KeyMode::Exclusive;
+    bool typing = input::GetTypingTarget() == input::TypingTarget::Overlay &&
+                  input::GetGrabStatus() == input::GrabStatus::Active;
     bool ghost = input::GetGhostMode() == input::GhostMode::On;
-    DrawPill(dc, fSmall, lay.pillMode, excl ? L"Exclusive" : L"Mirror",
-             excl ? RGB(240, 150, 40) : RGB(60, 190, 120));
+    DrawPill(dc, fSmall, lay.pillMode, typing ? L"Overlay typing" : L"Normal typing",
+             typing ? RGB(34, 197, 94) : RGB(115, 115, 115));
     DrawPill(dc, fSmall, lay.pillGhost, ghost ? L"Ghost" : L"Solid",
              ghost ? RGB(160, 110, 240) : RGB(120, 128, 150));
 
@@ -411,7 +422,7 @@ void Paint(HDC wndDc) {
 
     wchar_t status[160];
     swprintf(status, sizeof(status) / sizeof(status[0]), L"%ls  ·  %ls  ·  %d%%  ·  %dx%d",
-             excl ? L"Exclusive" : L"Mirror", ghost ? L"Ghost" : L"Solid", (int)(g_opacity * 100.0 + 0.5), w,
+             typing ? L"Overlay typing" : L"Normal typing", ghost ? L"Ghost" : L"Solid", (int)(g_opacity * 100.0 + 0.5), w,
              h);
     RECT statusRect = R(S(16), y, w - S(16), y + S(20));
     Text(dc, fBody, status, statusRect, kMuted, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
@@ -427,9 +438,8 @@ void Paint(HDC wndDc) {
     rows[1].left = L"Alt+A / S  Opacity";
     rows[1].right = L"Alt+F  Fullscreen";
     rows[2].left = L"Alt+D  Default size";
-    rows[2].right = std::wstring(L"Alt+") + up(cfg.modeKey) + L"  Typing mode";
-    rows[3].left = std::wstring(L"Alt+") + up(cfg.snapKey) + L"  Snap (soon)";
-    rows[3].right = std::wstring(L"Alt+") + up(cfg.ghostWriterKey) + L"  Ghost Writer (soon)";
+    rows[2].right = std::wstring(L"Alt+") + up(cfg.modeKey) + L"  Typing target";
+    rows[3].left = std::wstring(L"Alt+") + up(cfg.snapKey) + L"  Snap";
     int colW = (w - S(32)) / 2;
     for (int i = 0; i < 4; i++) {
         if (y + S(20) > h - S(24)) break;  // compact window: only what fits
@@ -440,12 +450,12 @@ void Paint(HDC wndDc) {
         y += S(22);
     }
 
-    if (!browser::FailureReason().empty()) {
+    if (!chat_view::FailureReason().empty()) {
         RECT error = R(S(16), lay.header + S(46), w - S(16), h - S(14));
         HBRUSH brush = CreateSolidBrush(kBg);
         FillRect(dc, &error, brush);
         DeleteObject(brush);
-        Text(dc, fBody, Widen(browser::FailureReason()), error, kMuted, DT_LEFT | DT_WORDBREAK);
+        Text(dc, fBody, Widen(chat_view::FailureReason()), error, kMuted, DT_LEFT | DT_WORDBREAK);
     }
 
     // Resize grip (inside the rounded corner)
@@ -581,7 +591,7 @@ void OnLButtonUp(int x, int y) {
             SetFullscreen();
             break;
         case HitPillMode:
-            input::CycleKeyMode();
+            input::ToggleTypingTarget();
             break;
         case HitPillGhost:
             input::ToggleGhostMode();
@@ -635,14 +645,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         }
         case WM_SIZE:
             UpdateRegion();
-            browser::ResizeHost();
+            chat_view::ResizeHost();
             ui::PushState();
             return 0;
         case WM_CRONQ_SNAP_DONE:
             snap::OnEncoded(reinterpret_cast<void*>(lp));
             return 0;
-        case WM_CRONQ_BROWSER_RECOVER:
-            browser::Recover(static_cast<unsigned>(wp), static_cast<unsigned>(lp));
+        case WM_CRONQ_WEBVIEW_RECOVER:
+            chat_view::Recover(static_cast<unsigned>(wp), static_cast<unsigned>(lp));
             return 0;
         case WM_LBUTTONDOWN:
             OnLButtonDown((short)LOWORD(lp), (short)HIWORD(lp));
@@ -674,6 +684,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             }
             break;
         case WM_TIMER:
+            if(wp==kTypingHoverTimerId){chat_view::CheckTypingHover();return 0;}
             if (wp == kDragTimerId) {
                 if (g_drag == DragNone || !(GetAsyncKeyState(VK_LBUTTON) & 0x8000)) {
                     KillTimer(hwnd, kDragTimerId);
@@ -686,10 +697,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 KillTimer(hwnd, kToastTimerId);
                 g_toast.clear();
                 QueueDraw();
-                return 0;
-            }
-            if (wp == input::kIdleTimerId) {
-                input::OnIdleTimerExpired();
                 return 0;
             }
             if (wp == snap::kSnapCaptureTimerId) {
@@ -706,30 +713,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             }
             if (wp == snap::kSnapWorkerTimerId) {
                 snap::OnWorkerPoll();
-                return 0;
-            }
-            if (wp == ghost::kGhostCountdownTimerId) {
-                ghost::OnCountdownTick();
-                return 0;
-            }
-            if (wp == ghost::kGhostSettleTimerId) {
-                ghost::OnSettleTick();
-                return 0;
-            }
-            if (wp == ghost::kGhostStepTimerId) {
-                ghost::StepTyping();
-                return 0;
-            }
-            if (wp == ghost::kGhostFocusPollTimerId) {
-                ghost::OnFocusPoll();
-                return 0;
-            }
-            if (wp == ghost::kGhostProgressTimerId) {
-                ghost::OnProgressTick();
-                return 0;
-            }
-            if (wp == ghost::kGhostGuardDisengageTimerId) {
-                ghost::OnGuardDisengageTimeout();
                 return 0;
             }
             break;
@@ -756,7 +739,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             return 0;  // preserve the current physical rectangle; scale controls to the new monitor
         case WM_POWERBROADCAST:
             if (wp == PBT_APMSUSPEND) {
-                ghost::Cancel();
                 input::ReleaseGrab();
             }
             if (wp == PBT_APMRESUMEAUTOMATIC || wp == PBT_APMRESUMESUSPEND) {
@@ -769,7 +751,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             return TRUE;
         case WM_WTSSESSION_CHANGE:
             if (wp == WTS_SESSION_LOCK) {
-                ghost::Cancel();
                 input::ReleaseGrab();
             }
             if (wp == WTS_SESSION_UNLOCK) {
@@ -788,6 +769,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         case WM_ENDSESSION:
             if (wp) PostMessageW(hwnd, WM_CRONQ_QUIT, 0, 0);
             return 0;
+        case WM_CRONQ_INPUT_STATE:
         case WM_CRONQ_IPC:
         case WM_CRONQ_HOTKEY:
         case WM_CRONQ_QUIT:
@@ -845,7 +827,7 @@ BOOL CALLBACK ProtectEnumProc(HWND hwnd, LPARAM) {
 
 // Windows only lets a process exclude its own windows from capture, and Cronq creates all of its
 // top-level windows (overlay, kill prompt) on this UI thread. WebView2's own popups belong to
-// msedgewebview2.exe and cannot be excluded: browser.cpp disables them instead.
+// msedgewebview2.exe and cannot be excluded: chat_view.cpp disables them instead.
 void ProtectAllWindows() {
     if (!g_captureHidden) return;
     EnumThreadWindows(GetCurrentThreadId(), ProtectEnumProc, 0);
@@ -912,6 +894,7 @@ bool Init(bool startVisible) {
 void Cleanup() {
     if (g_hwnd) {
         WTSUnRegisterSessionNotification(g_hwnd);
+        KillTimer(g_hwnd, kTypingHoverTimerId);
         KillTimer(g_hwnd, kDragTimerId);
         KillTimer(g_hwnd, kToastTimerId);
     }
@@ -947,9 +930,10 @@ void Show() {
     else KeepOnScreen();
     SetWindowPos(g_hwnd, HWND_TOPMOST, g_x, g_y, g_w, g_h, SWP_NOACTIVATE | SWP_SHOWWINDOW);
     g_visible = true;
+    SetTimer(g_hwnd,kTypingHoverTimerId,100,nullptr);
     hotkey::SetOverlayVisible(true);
     hotkey::UpdateOverlayRect(g_x, g_y, g_x + g_w, g_y + g_h);
-    browser::Resume();
+    chat_view::Resume();
     Log("WINDOW", "Overlay shown (topmost, no-activate at (%d, %d))", g_x, g_y);
     QueueDraw();
     raise::Start();
@@ -957,13 +941,13 @@ void Show() {
 
 void Hide() {
     if (!g_hwnd) return;
+    KillTimer(g_hwnd,kTypingHoverTimerId);
     raise::Stop();
     ShowWindow(g_hwnd, SW_HIDE);
     g_visible = false;
     hotkey::SetOverlayVisible(false);
-    input::NotifyOverlayHidden();
     hotkey::UpdateOverlayRect(0, 0, 0, 0);
-    browser::Pause();
+    chat_view::Pause();
     Log("WINDOW", "Overlay hidden");
 }
 
@@ -1136,17 +1120,11 @@ void SwitchApp(const std::string& name) {
     if (EqNoCase(name, "chatgpt")) {
         g_app = "chatgpt";
         SetCompactMode(false);
-    } else if (EqNoCase(name, "browser")) {
-        g_app = "browser";
-        SetCompactMode(false);
-    } else if (EqNoCase(name, "ghost")) {
-        g_app = "ghost";
-        SetCompactMode(false);
     } else {
         g_app = "home";
         SetCompactMode(true);
     }
-    browser::SetActiveApp(g_app);
+    chat_view::SetActiveApp(g_app);
     Log("WINDOW", "Switched view to '%s'.", g_app.c_str());
     QueueDraw();
 }
@@ -1169,22 +1147,18 @@ void BeginExternalDrag(bool move, int edges) {
 }
 void ToggleHeight() { ToggleMaximizedHeight(); }
 void Back() {
-    if ((g_app == "browser" || g_app == "chatgpt") && browser::CanGoBack())
-        browser::GoBack();
+    if (g_app == "chatgpt" && chat_view::CanGoBack())
+        chat_view::GoBack();
     else
         SwitchApp("home");
 }
 void UniversalReset() {
     god_copy::Cleanup();
-    ghost::Cancel();
     input::ReleaseGrab();
-    // DECISION: owner confirmed Linux overlay_universal_reset behavior (Home + Mirror/Solid).
-    input::SetKeyMode(KeyMode::Mirror);
+    // Reset always restores normal application typing and the solid overlay.
     input::SetGhostMode(input::GhostMode::Off);
     g_userMoved = false;
-    browser::UniversalReset();
-    ui::PostToUi("{\"type\":\"reset-editor\"}");
-    app::HandleCommand("CLEAR_TEST_ENTRY");
+    chat_view::UniversalReset();
     SwitchApp("home");
     ShowToast("Cronq reset to new state");
 }

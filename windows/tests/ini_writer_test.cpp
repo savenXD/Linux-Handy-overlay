@@ -22,44 +22,35 @@ int main() {
         "width = 360\r\n"
         "height = 640\r\n"
         "\r\n"
-        "[GhostTiming]\r\n"
-        "human = 1\r\n"
-        "speed = 0 # default speed\r\n"
-        "safe = 0\r\n";
+        "[Appearance]\r\n"
+        "mode = 1\r\n"
+        "contrast = 0 # default contrast\r\n"
+        "custom = 0\r\n";
 
-    bool ok1 = SetIniInt(ini1, "GhostTiming", "speed", 2);
+    bool ok1 = SetIniInt(ini1, "Appearance", "contrast", 2);
     CHECK(ok1);
-    CHECK(ini1.find("speed = 2 # default speed") != std::string::npos);
+    CHECK(ini1.find("contrast = 2 # default contrast") != std::string::npos);
     CHECK(ini1.find("width = 360") != std::string::npos);
     CHECK(ini1.find("\r\n") != std::string::npos);
-    CHECK(GetIniInt(ini1, "GhostTiming", "speed", -1) == 2);
-    CHECK(GetIniInt(ini1, "GhostTiming", "human", -1) == 1);
-    CHECK(GetIniInt(ini1, "GhostTiming", "safe", -1) == 0);
-    CHECK(GetIniInt(ini1, "General", "width", -1) == 360);
 
     // 2. Add new key to existing section
-    bool ok2 = SetIniInt(ini1, "GhostTiming", "extra_opt", 42);
+    bool ok2 = SetIniInt(ini1, "Appearance", "extra_opt", 42);
     CHECK(ok2);
-    CHECK(GetIniInt(ini1, "GhostTiming", "extra_opt", -1) == 42);
+    CHECK(ini1.find("extra_opt = 42") != std::string::npos);
 
     // 3. Add new section and key to INI without the section
     std::string ini2 =
         "[General]\n"
         "width = 500\n";
-    bool ok3 = SetIniInt(ini2, "GhostTiming", "human", 1);
+    bool ok3 = SetIniInt(ini2, "Appearance", "mode", 1);
     CHECK(ok3);
-    CHECK(ini2.find("[GhostTiming]\nhuman = 1\n") != std::string::npos);
-    CHECK(GetIniInt(ini2, "GhostTiming", "human", -1) == 1);
+    CHECK(ini2.find("[Appearance]\nmode = 1\n") != std::string::npos);
 
-    // 4. Default value on missing key
-    CHECK(GetIniInt(ini2, "NonExistent", "missing", 999) == 999);
+    // 4. Preserve exact formatting and a UTF-8 BOM.
 
-    std::string exact = "\xEF\xBB\xBF[GhostTiming]\r\n\tspeed\t=\t0   # preserve me  \r\n";
-    CHECK(GetIniInt(exact, "GhostTiming", "speed", -1) == 0);
-    CHECK(SetIniInt(exact, "GhostTiming", "speed", 2));
-    CHECK(exact == "\xEF\xBB\xBF[GhostTiming]\r\n\tspeed\t=\t2   # preserve me  \r\n");
-    CHECK(GetIniInt("[s]\nk=12junk\n", "s", "k", 7) == 7);
-    CHECK(GetIniInt("[s]\nk=999999999999999999999999\n", "s", "k", 7) == 7);
+    std::string exact = "\xEF\xBB\xBF[Appearance]\r\n\tcontrast\t=\t0   # preserve me  \r\n";
+    CHECK(SetIniInt(exact, "Appearance", "contrast", 2));
+    CHECK(exact == "\xEF\xBB\xBF[Appearance]\r\n\tcontrast\t=\t2   # preserve me  \r\n");
     std::string corner="[General]\r\ncorner = bottom-left  # saved position\r\n[Appearance]\r\nmode = 2\r\n";
     CHECK(SetIniString(corner,"General","corner","bottom-right"));
     CHECK(corner=="[General]\r\ncorner = bottom-right  # saved position\r\n[Appearance]\r\nmode = 2\r\n");

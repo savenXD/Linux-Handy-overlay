@@ -41,12 +41,8 @@ int main(int argc, char** argv) {
     CHECK(c.monitor == "primary");
     CHECK(c.opacity == 1.0);
     CHECK(!c.startVisible);
-    CHECK(c.defaultKeyMode == KeyMode::Mirror);
 
-    // [Browser]
-    CHECK(c.homeUrl == "https://html5test.com");
-    CHECK(c.searchUrlTemplate == "https://duckduckgo.com/?q=%s");
-    CHECK(c.userAgent.find("Pixel 8") != std::string::npos);
+    // ChatGPT authentication
     CHECK(!c.chatgptAllowlist.empty());
 
     // [Hotkeys]
@@ -54,7 +50,6 @@ int main(int argc, char** argv) {
     CHECK(c.modeKey == 'm');
     CHECK(c.ghostKey == 'g');
     CHECK(c.snapKey == 'p');
-    CHECK(c.ghostWriterKey == 'w');
     CHECK(c.shieldClipboardKeys == true);
 
     // [Snap]
@@ -63,11 +58,6 @@ int main(int argc, char** argv) {
     CHECK(c.snapSave == true);
     CHECK(c.snapKeepCount == 20);
 
-    // [GhostWriter]
-    CHECK(c.ghostDelayMs == 0);
-    CHECK(c.ghostNewline == "space");
-    CHECK(c.ghostTab == "space");
-    CHECK(c.ghostMaxChars == 100000);
 
     // Test valid overrides
     std::string overrideText =
@@ -75,7 +65,6 @@ int main(int argc, char** argv) {
         "width = 480\n"
         "height = 800\n"
         "opacity = 0.75\n"
-        "default_key_mode = exclusive\n"
         "[Hotkeys]\n"
         "toggle_key = y\n"
         "[Snap]\n"
@@ -87,7 +76,6 @@ int main(int argc, char** argv) {
     CHECK(c2.width == 480);
     CHECK(c2.height == 800);
     CHECK(c2.opacity >= 0.74 && c2.opacity <= 0.76);
-    CHECK(c2.defaultKeyMode == KeyMode::Exclusive);
     CHECK(c2.toggleKey == 'y');
     CHECK(c2.snapDelayMs == 120);
     CHECK(c2.snapKeepCount == 50);

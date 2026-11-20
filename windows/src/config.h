@@ -1,11 +1,9 @@
-// Same keys, defaults and validation ranges as src/config.c on Linux.
+// Windows overlay settings. Typing always starts in the normal application.
 #pragma once
 
 #include "common.h"
 
 namespace cronq {
-
-enum class KeyMode { Mirror = 0, Exclusive = 1 };
 
 struct AppConfig {
     int width = 360;
@@ -16,13 +14,7 @@ struct AppConfig {
     double opacity = 1.0;                // 0.1 .. 1.0
     bool startVisible = false;
     int appearanceMode = 2;              // 0 dark, 1 light, 2 transparent black text (default), 3 transparent white text
-    KeyMode defaultKeyMode = KeyMode::Mirror;
 
-    std::string homeUrl = "https://html5test.com";
-    std::string searchUrlTemplate = "https://duckduckgo.com/?q=%s";
-    std::string userAgent =
-        "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/124.0.0.0 Mobile Safari/537.36";
     std::string chatgptAllowlist =
         "chatgpt.com,openai.com,oaistatic.com,oaiusercontent.com,auth0.com,google.com,google.co.in,"
         "gstatic.com,googleusercontent.com,googleapis.com,recaptcha.net,cloudflare.com,"
@@ -40,11 +32,6 @@ struct AppConfig {
     bool snapSave = true;
     int snapKeepCount = 20;
 
-    char ghostWriterKey = 'w';
-    int ghostDelayMs = 0;
-    std::string ghostNewline = "space";  // space, return, skip
-    std::string ghostTab = "space";      // space, tab, skip
-    int ghostMaxChars = 100000;
 };
 
 namespace config {

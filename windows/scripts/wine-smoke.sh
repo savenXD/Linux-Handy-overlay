@@ -52,7 +52,7 @@ expect() {
 }
 
 echo "== config parser unit test"
-fixture="Z:$(echo "$HERE/../shared/fixtures/config_defaults.ini" | tr / '\\')"
+fixture="Z:$(echo "$HERE/tests/fixtures/config_defaults.ini" | tr / '\\')"
 for test in config_test parity_config_test; do
     if out=$(timeout 60 wine "$BIN/$test.exe" "$fixture" 2>/dev/null | tr -d '\r'); then
         check "$test" "$out" "all checks passed"
@@ -62,7 +62,7 @@ for test in config_test parity_config_test; do
 done
 
 echo "== Phase 2 pure logic tests"
-for test in capture_logic_test browser_logic_test jsonlite_test log_rotate_test geometry_test ghost_logic_test snap_logic_test ini_writer_test key_translate_test input_logic_test lock_logic_test recovery_logic_test purge_logic_test update_logic_test image_logic_test image_codec_test crash_report_test; do
+for test in capture_logic_test chat_logic_test jsonlite_test log_rotate_test geometry_test snap_logic_test ini_writer_test key_translate_test input_logic_test lock_logic_test recovery_logic_test purge_logic_test update_logic_test image_logic_test image_codec_test crash_report_test; do
     if out=$(timeout 60 wine "$BIN/$test.exe" 2>/dev/null | tr -d '\r'); then
         printf '%s\n' "$out"
         check "$test" "$out" "all checks passed"
@@ -71,35 +71,37 @@ for test in capture_logic_test browser_logic_test jsonlite_test log_rotate_test 
     fi
 done
 
-set_timing() {
-    python3 - "$WINEPREFIX/drive_c/users/$USER/AppData/Roaming/cronq/config.ini" "$1" <<'PYCONFIG'
+configure_test() {
+    python3 - "$WINEPREFIX/drive_c/users/$USER/AppData/Roaming/cronq/config.ini" <<'PYCONFIG'
 import configparser, pathlib, sys
 path=pathlib.Path(sys.argv[1]);path.parent.mkdir(parents=True,exist_ok=True)
-c=configparser.ConfigParser(interpolation=None);c.read(path)
-c['GhostTiming']={'human':sys.argv[2],'speed':'0','safe':'0'}
+c=configparser.ConfigParser(interpolation=None)
+c['General']={'width':'360','height':'640'}
+c['Appearance']={'mode':'0'}
 # Wine has no WDA_EXCLUDEFROMCAPTURE, so Cronq would refuse to start (fail-closed). Test without it.
 c['Privacy']={'hide_from_capture':'false'}
 with path.open('w') as f:c.write(f)
 PYCONFIG
 }
-set_timing 1
+configure_test
 
 echo "== daemon"
 ( wine "$BIN/cronq.exe" --daemon --show >"$WORK/daemon.log" 2>&1 & )
 for _ in $(seq 1 30); do [ -n "$(cli status)" ] && break; sleep 0.5; done
 check "status reports running + visible" "$(cli status)" "VISIBLE=TRUE"
-check "default geometry is compact 360 wide" "$(cli --get-geometry)" "W=360 H=280"
+# FitPhone caps default height at 75% of (800 - 2*12) = 582, preserving aspect ratio.
+check "default geometry fits the 1280x800 desktop" "$(cli --get-geometry)" "W=327 H=280"
 
 echo "== hotkeys through the low-level hook (SendInput)"
 keys alt+x;  expect "Alt+X hides"      "VISIBLE=FALSE" cli status
 keys alt+x;  expect "Alt+X shows"      "VISIBLE=TRUE" cli status
 keys alt+g;  expect "Alt+G ghost on"   "GHOST=GHOST" cli status
 keys alt+g;  expect "Alt+G ghost off"  "GHOST=SOLID" cli status
-keys alt+m;  expect "Alt+M exclusive"  "MODE=EXCLUSIVE" cli status
-keys alt+m;  expect "Alt+M mirror"     "MODE=MIRROR" cli status
+keys alt+m;  expect "Alt+M overlay typing"  "MODE=OVERLAY" cli status
+keys alt+m;  expect "Alt+M normal typing"     "MODE=NORMAL" cli status
 keys alt+f;  expect "Alt+F fullscreen" "W=1280 H=800" cli --get-geometry
-keys alt+f;  expect "Alt+F restores"   "W=360 H=280" cli --get-geometry
-keys alt+d;  expect "Alt+D default size" "W=360 H=640" cli --get-geometry
+keys alt+f;  expect "Alt+F restores"   "W=327 H=280" cli --get-geometry
+keys alt+d;  expect "Alt+D restores compact Home size" "W=327 H=280" cli --get-geometry
 before=$(grep -c "Toggling overlay" "$WORK/daemon.log")
 keys ctrl+alt+x; sleep 2
 after=$(grep -c "Toggling overlay" "$WORK/daemon.log")
@@ -113,15 +115,15 @@ check "unknown command" "$(cli --status)" "MODE="
 
 echo "== Phase 2 fallback / commands"
 expect "WebView2 unavailable is logged without crashing" "WebView2 unavailable" cat "$WORK/daemon.log"
-cli --app chatgpt >/dev/null; check "ChatGPT app expands" "$(cli --get-geometry)" "W=1280 H=640"
+cli --app chatgpt >/dev/null; check "ChatGPT app expands" "$(cli --get-geometry)" "W=1280 H=582"
 check "ChatGPT app state" "$(cli status)" "APP=chatgpt"
 cli --back >/dev/null; check "Back without history returns Home" "$(cli status)" "APP=home"
-cli hide >/dev/null; cli --load example.com >/dev/null
-check "Load while hidden selects Browser" "$(cli status)" "VISIBLE=FALSE APP=browser"
+cli hide >/dev/null; cli --app chatgpt >/dev/null
+check "ChatGPT selection while hidden" "$(cli status)" "VISIBLE=FALSE APP=chatgpt"
 check "No modal in fallback" "$(cli --has-modal)" "FALSE"
 cli --close-modal >/dev/null; cli --reload >/dev/null
-cli --ghost on >/dev/null; cli --mode exclusive >/dev/null; cli --reset >/dev/null
-check "Reset restores Linux Home/Mirror/Solid" "$(cli status)" "MODE=MIRROR TARGET=NONE GHOST=SOLID GRAB=NONE VISIBLE=FALSE APP=home"
+cli --ghost on >/dev/null; cli --mode overlay >/dev/null; cli --reset >/dev/null
+check "Reset restores Linux Home/Normal/Solid" "$(cli status)" "MODE=NORMAL TARGET=NONE GHOST=SOLID GRAB=NONE VISIBLE=FALSE APP=home"
 cli show >/dev/null
 
 echo "== IPC reconnection stress"
@@ -133,7 +135,7 @@ fi
 
 echo "== native integration receiver"
 if timeout 45 wine "$BIN/runtime_test.exe" >"$WORK/runtime.log" 2>&1; then
-    check "external typing, cancel, reset and routing" "$(cat "$WORK/runtime.log")" "runtime_test: 0 failure(s)"
+    check "external focus and input routing" "$(cat "$WORK/runtime.log")" "runtime_test: 0 failure(s)"
 else
     cat "$WORK/runtime.log"; echo "FAIL  native runtime integration"; FAIL=$((FAIL+1))
 fi
@@ -149,17 +151,6 @@ echo "== clean kill"
 check "kill reply" "$(cli kill)" "Killed"
 sleep 2
 check "not running afterwards" "$(timeout 30 wine "$BIN/cronq.exe" status 2>&1 | tr -d '\r')" "not running"
-
-echo "== instant Unicode integration"
-set_timing 0
-( wine "$BIN/cronq.exe" --daemon --show >>"$WORK/daemon.log" 2>&1 & )
-for _ in $(seq 1 30); do [ -n "$(cli status)" ] && break; sleep 0.5; done
-if timeout 30 wine "$BIN/runtime_test.exe" --instant >"$WORK/instant.log" 2>&1; then
-    check "Instant mode sends exact Unicode text" "$(cat "$WORK/instant.log")" "runtime_test: 0 failure(s)"
-else
-    cat "$WORK/instant.log"; echo "FAIL  Instant Unicode integration"; FAIL=$((FAIL+1))
-fi
-cli kill >/dev/null; sleep 2
 
 echo "== supervisor restarts a crashed daemon"
 rm -f "$WINEPREFIX/drive_c/users/$USER/AppData/Local/cronq/crash.log"

@@ -2,12 +2,12 @@
 Type=Application
 Name=Cronq
 GenericName=Floating Desktop Companion
-Comment=Always-on-top non-focus-stealing browser and phone overlay
+Comment=Always-on-top ChatGPT overlay with typing routing
 Exec=cronq-supervisor
 Icon=cronq
 Terminal=false
 Categories=Utility;Network;Development;
-Keywords=overlay;companion;chatgpt;browser;floating;always-on-top;
+Keywords=overlay;companion;chatgpt;floating;always-on-top;
 StartupNotify=false
 X-GNOME-Autostart-enabled=true
 X-Cinnamon-Autostart-enabled=true

@@ -5,3 +5,8 @@ bin/
 # Windows build output
 windows/build*/
 windows/dist/
+
+# Linux generated output
+dist/
+tests/linux_runtime_test
+__pycache__/

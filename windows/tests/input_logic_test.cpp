@@ -13,8 +13,7 @@ int main() {
     Context c;
     c.target = true;
     CHECK(r.Key('A', true, c).forward);
-    CHECK(r.Key('A', false, c).forward);  // Mirror releases must reach WebView2.
-    c.exclusive = true;
+    CHECK(r.Key('A', false, c).forward);  // Releases must reach WebView2.
     CHECK(r.Key('B', true, c).swallow);
     auto repeat = r.Key('B', true, c);
     CHECK(repeat.forward && repeat.repeat && repeat.swallow);
@@ -29,7 +28,7 @@ int main() {
     CHECK(r.Key('V', true, c).clipboard);
     c.ctrlOnly = false;
     CHECK(r.Key('V', false, c).clipboard);
-    c.guard = true;
+    c.target = false;
     c.hotkey = true;
     CHECK(r.Key('W', true, c).hotkey);
     CHECK(r.Key('W', false, c).swallow);
@@ -62,13 +61,16 @@ int main() {
         CHECK(s.Key('Y', true, h).hotkey);
         CHECK(s.Key('Y', true, h).hotkey);  // held Alt+Y keeps repeating as a hotkey
     }
-    // A stale exclusive key after routing ended is passed through.
+    // A key held while routing ends stays swallowed until release; repeats never leak.
     {
         Router s;
         Context e;
-        e.target = e.exclusive = true;
+        e.target = true;
         CHECK(s.Key('Q', true, e).swallow);
         e.target = false;
+        auto held = s.Key('Q', true, e);
+        CHECK(held.swallow && !held.forward);
+        CHECK(s.Key('Q', false, e).swallow);
         CHECK(!s.Key('Q', true, e).swallow);
     }
     // Reset forgets everything.

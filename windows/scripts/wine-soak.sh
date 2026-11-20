@@ -99,11 +99,11 @@ while true; do
     cli status >/dev/null
     cli --size 360 400 >/dev/null
     cli --opacity 0.8 >/dev/null
-    cli --mode exclusive >/dev/null
+    cli --mode overlay >/dev/null
     cli --ghost on >/dev/null
     cli --get-geometry >/dev/null
     cli --ghost off >/dev/null
-    cli --mode mirror >/dev/null
+    cli --mode normal >/dev/null
     cli --opacity 1.0 >/dev/null
     cli --size 360 280 >/dev/null
 

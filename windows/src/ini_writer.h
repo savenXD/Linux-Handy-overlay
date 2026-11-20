@@ -14,8 +14,5 @@ namespace ini_writer {
 bool SetIniInt(std::string& text, const char* section, const char* key, int value);
 bool SetIniString(std::string& text, const char* section, const char* key, const std::string& value);
 
-// Reads an integer key from an INI string under the given section, returning defaultValue if not found.
-int GetIniInt(const std::string& text, const char* section, const char* key, int defaultValue);
-
 }  // namespace ini_writer
 }  // namespace cronq

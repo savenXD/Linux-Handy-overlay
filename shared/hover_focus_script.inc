@@ -1,0 +1,8 @@
+"((x,y,width,height)=>{"
+"if(width<=0||height<=0)return false;"
+"let e=document.elementFromPoint(x*innerWidth/width,y*innerHeight/height);"
+"if(e)e=e.closest('input,textarea,[contenteditable]');"
+"if(!e||e.disabled||e.readOnly||e.matches(':disabled')||e.closest('[inert]')||!e.getClientRects().length)return false;"
+"if(!(e.isContentEditable||e.tagName==='TEXTAREA'||(e.tagName==='INPUT'&&/^(text|search|email|url|tel|number|password)$/i.test(e.type))))return false;"
+"e.focus({preventScroll:true});return document.activeElement===e||e.contains(document.activeElement);"
+"})"

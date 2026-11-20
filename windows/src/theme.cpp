@@ -1,6 +1,6 @@
 #include "theme.h"
 #include "config.h"
-#include "browser.h"
+#include "chat_view.h"
 #include "overlay.h"
 #include "ui_bridge.h"
 #include <algorithm>
@@ -9,7 +9,7 @@ namespace cronq::theme {
 namespace {
 int g_mode = 0;
 auto g_palette = theme_logic::MakePalette(0);
-void Publish() { browser::RefreshAppearance(); ui::PushState(); overlay::RefreshAppearance(); }
+void Publish() { chat_view::RefreshAppearance(); ui::PushState(); overlay::RefreshAppearance(); }
 }
 void Init() { Reload(); }
 void Cleanup() {}

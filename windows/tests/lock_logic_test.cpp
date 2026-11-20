@@ -44,6 +44,8 @@ int main() {
     CHECK(Evaluate(0x0D, false, true, 0, false, false, pending) == Action::None);  // key-up
     CHECK(Evaluate(0x0D, true, true, 0, false, false, pending) == Action::None);   // held from before
 
+    CHECK(Evaluate(0x1B, true, true, 9, true, false, pending) == Action::KillCancel);
+
     // Armed kill: any other non-modifier key aborts (and is passed on); modifiers and the chord do not.
     CHECK(Evaluate('A', true, false, 0, false, false, pending) == Action::KillAbort);
     CHECK(Evaluate(0x20, true, false, 0, false, false, pending) == Action::KillAbort);  // space
@@ -53,6 +55,7 @@ int main() {
     CHECK(Evaluate(0x14, true, false, 0, false, false, pending) == Action::None);  // CAPS LOCK
     CHECK(Evaluate('K', true, false, 9, true, false, pending) == Action::None);    // chord again
     CHECK(Evaluate('A', false, true, 0, false, false, pending) == Action::None);   // key-up
+    CHECK(Evaluate(0x1B, true, true, 9, false, false, pending) == Action::KillCancel);
     CHECK(kKillTimeoutHiddenMs < kKillTimeoutVisibleMs);
 
     std::puts("lock_logic_test: all checks passed");

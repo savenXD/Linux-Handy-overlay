@@ -1,6 +1,7 @@
 #include "input.h"
 
 #include "hotkey.h"
+#include "chat_view.h"
 #include "overlay.h"
 
 namespace cronq {
@@ -8,128 +9,63 @@ namespace input {
 
 namespace {
 
-HWND g_targetHwnd = nullptr;
-KeyMode g_keyMode = KeyMode::Mirror;
-int64_t g_lastInputUs = 0;
 TypingTarget g_target = TypingTarget::None;
 GhostMode g_ghost = GhostMode::Off;
 GrabStatus g_grabStatus = GrabStatus::None;
-bool g_timerActive = false;
-
-void StartIdleTimer() {
-    if (g_targetHwnd) {
-        g_lastInputUs = NowUs();
-        g_timerActive = SetTimer(g_targetHwnd, kIdleTimerId, 60000, nullptr) != 0;
-        if (!g_timerActive) {
-            hotkey::SetTypingTarget(0);
-            g_target = TypingTarget::None;
-            LogErr("INPUT", "Idle timer failed; released input routing");
-        }
-    }
-}
-
-void StopIdleTimer() {
-    if (g_targetHwnd && g_timerActive) {
-        KillTimer(g_targetHwnd, kIdleTimerId);
-        g_timerActive = false;
-    }
-}
-
 }  // namespace
 
-bool Init(HWND target) {
-    g_targetHwnd = target;
-    g_keyMode = KeyMode::Mirror;
+bool Init(HWND) {
     g_target = TypingTarget::None;
     g_ghost = GhostMode::Off;
     g_grabStatus = GrabStatus::None;
-    hotkey::SetKeyMode(0);
     hotkey::SetTypingTarget(0);
     hotkey::SetClipboardShield(false);
     return true;
 }
 
 void Cleanup() {
-    StopIdleTimer();
     SetTypingTarget(TypingTarget::None);
-    g_targetHwnd = nullptr;
 }
 
-KeyMode GetKeyMode() { return g_keyMode; }
-
-void SetKeyMode(KeyMode mode) {
-    if (g_keyMode == mode) return;
-    g_keyMode = mode;
-    Log("INPUT", "Key mode set to: %s", mode == KeyMode::Exclusive ? "EXCLUSIVE" : "MIRROR");
-
-    if (g_target == TypingTarget::Overlay) {
-        if (mode == KeyMode::Exclusive) {
-            hotkey::SetKeyMode(1);
-            g_grabStatus = hotkey::IsHookInstalled() ? GrabStatus::Active : GrabStatus::Failed;
-            StartIdleTimer();
-        } else {
-            hotkey::SetKeyMode(0);
-            g_grabStatus = GrabStatus::None;
-        }
-    } else {
-        hotkey::SetKeyMode(0);
-        g_grabStatus = GrabStatus::None;
-    }
-    overlay::QueueDraw();
+void ToggleTypingTarget() {
+    SetTypingTarget(g_target == TypingTarget::Overlay ? TypingTarget::None : TypingTarget::Overlay);
 }
-
-void CycleKeyMode() { SetKeyMode(g_keyMode == KeyMode::Mirror ? KeyMode::Exclusive : KeyMode::Mirror); }
 
 TypingTarget GetTypingTarget() { return g_target; }
 
 void SetTypingTarget(TypingTarget target) {
+    // A hidden overlay may retain routing, but cannot start a new capture.
+    if (target == TypingTarget::Overlay &&
+        ((!overlay::IsVisible() && g_target != TypingTarget::Overlay) || hotkey::IsLocked() || !hotkey::IsHookInstalled())) {
+        g_grabStatus = hotkey::IsHookInstalled() ? GrabStatus::None : GrabStatus::Failed;
+        target = TypingTarget::None;
+    }
     if (g_target == target) {
-        if (target == TypingTarget::Overlay) {
-            StartIdleTimer();
-        }
+        overlay::QueueDraw();
         return;
     }
     g_target = target;
-    Log("INPUT", "Typing target set to: %s", target == TypingTarget::Overlay ? "OVERLAY" : "NONE");
-
     if (target == TypingTarget::Overlay) {
-        const AppConfig& cfg = config::Get();
-        if (cfg.shieldClipboardKeys) {
-            hotkey::SetClipboardShield(true);
-        }
-        if (g_keyMode == KeyMode::Exclusive) {
-            hotkey::SetKeyMode(1);
-            g_grabStatus = hotkey::IsHookInstalled() ? GrabStatus::Active : GrabStatus::Failed;
-        } else {
-            hotkey::SetKeyMode(0);
-            g_grabStatus = GrabStatus::None;
-        }
+        hotkey::SetClipboardShield(config::Get().shieldClipboardKeys);
+        chat_view::PrepareTypingTarget();
         hotkey::SetTypingTarget(1);
-        StartIdleTimer();
+        g_grabStatus = GrabStatus::Active;
     } else {
-        hotkey::SetClipboardShield(false);
-        hotkey::SetKeyMode(0);
         hotkey::SetTypingTarget(0);
+        hotkey::SetClipboardShield(false);
         g_grabStatus = GrabStatus::None;
-        StopIdleTimer();
     }
+    Log("INPUT", "Typing target: %s", g_target == TypingTarget::Overlay ? "OVERLAY" : "NORMAL");
     overlay::QueueDraw();
 }
 
 GrabStatus GetGrabStatus() {
-    if (g_target == TypingTarget::Overlay && g_keyMode == KeyMode::Exclusive)
+    if (g_target == TypingTarget::Overlay)
         return hotkey::IsHookInstalled() ? GrabStatus::Active : GrabStatus::Failed;
-    return GrabStatus::None;
+    return g_grabStatus;
 }
 
-void ReleaseGrab() {
-    if (g_grabStatus == GrabStatus::Active) {
-        Log("INPUT", "Exclusive keyboard grab RELEASED.");
-    }
-    g_grabStatus = GrabStatus::None;
-    hotkey::SetKeyMode(0);
-    SetTypingTarget(TypingTarget::None);
-}
+void ReleaseGrab() { SetTypingTarget(TypingTarget::None); }
 
 GhostMode GetGhostMode() { return g_ghost; }
 
@@ -141,9 +77,11 @@ void SetGhostMode(GhostMode ghost) {
         if (g_target == TypingTarget::Overlay) {
             SetTypingTarget(TypingTarget::None);
         }
+        overlay::SetOpacity(0.50);
         overlay::SetGhost(true);
     } else {
         Log("INPUT", "Ghost mode DISABLED (solid overlay restored).");
+        overlay::SetOpacity(1.0);
         overlay::SetGhost(false);
     }
     overlay::QueueDraw();
@@ -152,27 +90,10 @@ void SetGhostMode(GhostMode ghost) {
 void ToggleGhostMode() { SetGhostMode(g_ghost == GhostMode::Off ? GhostMode::On : GhostMode::Off); }
 
 void OnMouseClick(bool inside) {
-    if (inside) {
-        if (g_ghost == GhostMode::On || !overlay::IsVisible()) {
-            return;
-        }
-        SetTypingTarget(TypingTarget::Overlay);
-    } else {
-        SetTypingTarget(TypingTarget::None);
-    }
+    // Only Alt+M or the typing indicator enables routing. Clicking normal UI controls
+    // must not silently change where the next keystroke goes.
+    if (!inside) ReleaseGrab();
 }
-
-void OnKeyActivity() {
-    if (g_target == TypingTarget::Overlay) StartIdleTimer();
-}
-
-void OnIdleTimerExpired() {
-    if (!g_timerActive || g_target != TypingTarget::Overlay || NowUs() - g_lastInputUs < 60000000) return;
-    Log("INPUT", "60-second idle timeout expired. Releasing typing target and grabs.");
-    SetTypingTarget(TypingTarget::None);
-}
-
-void NotifyOverlayHidden() { SetTypingTarget(TypingTarget::None); }
 
 }  // namespace input
 }  // namespace cronq

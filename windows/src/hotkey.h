@@ -17,8 +17,7 @@ enum class Id : int {
     Snap,         // Alt+P
     SnapWgc,      // Alt+O: temporary Windows Graphics Capture experiment
     SnapWgcWindow, // Alt+Shift+O: foreground window via WGC
-    Mode,         // Alt+M
-    GhostWrite,   // Alt+W
+    Mode,         // Alt+M: normal app / overlay typing target
     Camouflage,   // Alt+C toggles minimal camouflage
     Tone,         // Alt+T switches Light/Dark without changing transparency
     DockLeft,     // Alt+Left Arrow: save bottom-left corner
@@ -43,9 +42,7 @@ void InjectAltSuppressor();  // UI thread: stops the focused app from opening it
 // Thread-safe state synchronisation for the hook worker thread
 void UpdateOverlayRect(int left, int top, int right, int bottom);
 void SetTypingTarget(int target);  // 0 = None, 1 = Overlay
-void SetKeyMode(int mode);         // 0 = Mirror, 1 = Exclusive
 void SetClipboardShield(bool enabled);
-void SetTypingGuard(bool active);
 bool IsHookInstalled();
 bool CapsLockOn();
 void Reinstall();

@@ -1,5 +1,4 @@
 #include "focus_guard.h"
-#include "ghost.h"
 namespace cronq {
 namespace focus_guard {
 namespace {
@@ -12,7 +11,6 @@ void CALLBACK Foreground(HWINEVENTHOOK, DWORD, HWND hwnd, LONG, LONG, DWORD, DWO
     if (!hwnd || !g_overlay) return;
     if (!Ours(hwnd)) {
         g_lastExternal = hwnd;
-        ghost::OnForegroundChanged(hwnd);
         return;
     }
     int64_t now = NowUs();

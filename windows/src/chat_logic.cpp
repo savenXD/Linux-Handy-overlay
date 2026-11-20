@@ -1,8 +1,8 @@
-#include "browser_logic.h"
+#include "chat_logic.h"
 
 #include <algorithm>
 namespace cronq {
-namespace browser_logic {
+namespace chat_logic {
 namespace {
 bool Starts(const std::string& s, const char* p) {
     return s.rfind(p, 0) == 0;
@@ -17,33 +17,6 @@ std::string Lower(std::string s) {
     return s;
 }
 }  // namespace
-std::string NormalizeInput(const std::string& input, const std::string& tmpl) {
-    auto a = input.find_first_not_of(" \t\r\n\v\f");
-    if (a == std::string::npos)
-        return {};
-    std::string s = input.substr(a, input.find_last_not_of(" \t\r\n\v\f") - a + 1);
-    for (auto p : {"http://", "https://", "file://", "about:"})
-        if (Starts(s, p))
-            return s;
-    if (s.find(' ') == std::string::npos && (s.find('.') != std::string::npos || Starts(s, "localhost")))
-        return "https://" + s;
-    std::string encoded;
-    constexpr char hex[] = "0123456789ABCDEF";
-    // src/browser.c load_uri_internal: GLib allows UTF-8, but no reserved ASCII.
-    for (unsigned char c : s) {
-        if (c >= 128 || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' ||
-            c == '.' || c == '_' || c == '~')
-            encoded += char(c);
-        else {
-            encoded += '%';
-            encoded += hex[c >> 4];
-            encoded += hex[c & 15];
-        }
-    }
-    auto pos = tmpl.find("%s");
-    return pos == std::string::npos ? "https://duckduckgo.com/?q=" + encoded
-                                    : tmpl.substr(0, pos) + encoded + tmpl.substr(pos + 2);
-}
 bool IsAuthUri(const std::string& s) {
     for (auto p : {"oauth", "auth0", "accounts.google", "signin", "challenge", "login", "SetSID"})
         if (s.find(p) != std::string::npos)
@@ -103,7 +76,22 @@ if(n.localName==='title'&&n.closest&&n.closest('svg')){n.remove();return;}
 if(n.querySelectorAll){for(const e of n.querySelectorAll('[title]'))e.removeAttribute('title');
 for(const t of n.querySelectorAll('svg title'))t.remove();}};
 const start=()=>{const root=document.documentElement;if(!root)return;strip(root);
-new MutationObserver(ms=>{for(const m of ms){if(m.type==='attributes')strip(m.target);else for(const a of m.addedNodes)strip(a);}})
+new MutationObserver(ms=>{
+  const added=new Set();
+  for(const m of ms){
+    // A title change only affects this element, not all its descendants.
+    if(m.type==='attributes'){
+      if(m.target.hasAttribute('title'))m.target.removeAttribute('title');
+    }else for(const a of m.addedNodes)if(a.nodeType===1&&a.isConnected)added.add(a);
+  }
+  // Streaming replies can add a container and many of its descendants in one
+  // batch. Scan only the outermost added subtrees, once each.
+  for(const a of added){
+    let parent=a.parentElement;
+    while(parent&&!added.has(parent))parent=parent.parentElement;
+    if(!parent)strip(a);
+  }
+})
 .observe(root,{subtree:true,childList:true,attributes:true,attributeFilter:['title']});};
 if(document.documentElement)start();else document.addEventListener('DOMContentLoaded',start,{once:true});})())JS";
 }
@@ -113,5 +101,5 @@ std::string ChatGptUserScript() {
 #include "chatgpt_script.inc"
         ;
 }
-}  // namespace browser_logic
+}  // namespace chat_logic
 }  // namespace cronq

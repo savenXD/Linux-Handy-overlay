@@ -47,7 +47,7 @@ class ComHandler final : public Interface {
         try {
             return fn_ ? fn_(args...) : S_OK;
         } catch (...) {
-            LogErr("BROWSER", "Exception contained in COM callback");
+            LogErr("WEBVIEW", "Exception contained in COM callback");
             return S_OK;
         }
     }

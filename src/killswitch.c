@@ -1,5 +1,6 @@
 #include "killswitch.h"
 #include "hotkey.h"
+#include "input.h"
 #include "window.h"
 #include "xutil.h"
 
@@ -130,6 +131,7 @@ static gboolean on_prompt_raise(gpointer data) {
 void killswitch_prompt_show(void) {
     if (s_prompt_win) return;
     s_confirmed = false;
+    input_release_grab();
 
     s_prompt_win = gtk_window_new(GTK_WINDOW_POPUP);   /* override-redirect: never takes focus */
     gtk_window_set_accept_focus(GTK_WINDOW(s_prompt_win), FALSE);
@@ -163,7 +165,7 @@ void killswitch_prompt_show(void) {
     bool visible_prompt = overlay_is_visible();
     if (!visible_prompt) {
         hotkey_set_prompt_grabs(true);
-        s_timeout_id = g_timeout_add(KILL_PROMPT_TIMEOUT_SEC * 1000, on_prompt_timeout, NULL);
+        s_timeout_id = g_timeout_add(5000, on_prompt_timeout, NULL);
         xutil_log("KILL", "Kill prompt armed silently (overlay hidden).");
         return;
     }

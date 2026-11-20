@@ -1,7 +1,7 @@
 #include "theme.h"
 #include "config.h"
 #include "window.h"
-#include "browser.h"
+#include "chat_view.h"
 #include "xutil.h"
 
 #include <stdio.h>
@@ -10,59 +10,9 @@
 #include <gtk/gtk.h>
 
 static ThemeMode s_mode = THEME_CAMO_BLACK;
-static bool      s_auto = true;          /* no saved mode: camo text colour follows the system */
-static bool      s_system_dark = false;
-static ThemeMode s_prev_solid = THEME_LIGHT;   /* restored when Alt+C leaves camouflage */
-
-/* Is the desktop's GTK theme dark? Judged by the theme's own background colour. */
-static bool detect_system_dark(void) {
-    GtkWidgetPath *path = gtk_widget_path_new();
-    gtk_widget_path_append_type(path, GTK_TYPE_WINDOW);
-    GtkStyleContext *ctx = gtk_style_context_new();
-    gtk_style_context_set_path(ctx, path);
-    gtk_widget_path_free(path);
-    GdkRGBA c;
-    bool dark = false;
-    if (gtk_style_context_lookup_color(ctx, "theme_bg_color", &c)) {
-        double lum = 0.2126 * c.red + 0.7152 * c.green + 0.0722 * c.blue;
-        dark = lum < 0.5;
-    }
-    g_object_unref(ctx);
-    return dark;
-}
-
 static void theme_apply_everywhere(bool toast);
-
-static void on_system_theme_changed(GObject *obj, GParamSpec *pspec, gpointer data) {
-    (void)obj; (void)pspec; (void)data;
-    bool dark = detect_system_dark();
-    if (dark == s_system_dark) return;
-    s_system_dark = dark;
-    xutil_log("THEME", "System theme changed: %s", dark ? "dark" : "light");
-    if (s_auto) {
-        s_mode = dark ? THEME_CAMO_WHITE : THEME_CAMO_BLACK;
-        theme_apply_everywhere(false);
-    } else if (theme_is_camo()) {
-        browser_apply_theme((int)s_mode);
-    }
-}
-
 void theme_init(int mode_from_config) {
-    static bool watching = false;
-    s_system_dark = detect_system_dark();
-    if (!watching) {
-        GtkSettings *gs = gtk_settings_get_default();
-        if (gs) g_signal_connect(gs, "notify::gtk-theme-name", G_CALLBACK(on_system_theme_changed), NULL);
-        watching = true;
-    }
-    if (mode_from_config < 0 || mode_from_config > 3) {
-        s_auto = true;
-        s_mode = s_system_dark ? THEME_CAMO_WHITE : THEME_CAMO_BLACK;
-    } else {
-        s_auto = false;
-        s_mode = (ThemeMode)mode_from_config;
-    }
-    if (s_mode == THEME_DARK || s_mode == THEME_LIGHT) s_prev_solid = s_mode;
+    s_mode=(mode_from_config>=0 && mode_from_config<=3)?(ThemeMode)mode_from_config:THEME_CAMO_BLACK;
 }
 
 ThemeMode theme_get_mode(void) { return s_mode; }
@@ -85,7 +35,7 @@ const char *theme_fg_hex(void) {
 
 static void theme_apply_everywhere(bool toast) {
     overlay_apply_theme();
-    browser_apply_theme((int)s_mode);
+    chat_view_apply_theme((int)s_mode);
     if (toast) {
         static const char *names[] = { "Dark mode", "Light mode", "Camouflage: black text", "Camouflage: white text" };
         overlay_show_toast(names[s_mode]);
@@ -95,8 +45,6 @@ static void theme_apply_everywhere(bool toast) {
 void theme_set_mode(ThemeMode mode) {
     if (mode < 0 || mode > 3) return;
     s_mode = mode;
-    s_auto = false;
-    if (mode == THEME_DARK || mode == THEME_LIGHT) s_prev_solid = mode;
     char buf[8];
     snprintf(buf, sizeof(buf), "%d", (int)mode);
     config_save_value("Appearance", "mode", buf);
@@ -113,8 +61,12 @@ void theme_cycle(void) {
 }
 
 void theme_toggle_camo(void) {
-    if (theme_is_camo()) theme_set_mode(s_prev_solid);
-    else theme_set_mode(THEME_CAMO_BLACK);
+    switch(s_mode) {
+        case THEME_CAMO_BLACK: theme_set_mode(THEME_LIGHT); break;
+        case THEME_CAMO_WHITE: theme_set_mode(THEME_DARK); break;
+        case THEME_DARK: theme_set_mode(THEME_CAMO_WHITE); break;
+        default: theme_set_mode(THEME_CAMO_BLACK); break;
+    }
 }
 
 void theme_toggle_text(void) {
@@ -130,7 +82,6 @@ void theme_reload_from_config(void) {
     int m = config_get()->appearance_mode;
     if (m < 0 || m > 3 || (ThemeMode)m == s_mode) return;
     s_mode = (ThemeMode)m;
-    if (s_mode == THEME_DARK || s_mode == THEME_LIGHT) s_prev_solid = s_mode;
     theme_apply_everywhere(false);
 }
 
@@ -216,12 +167,12 @@ char *theme_build_css(const char *base_dark_css) {
         const char *fg = theme_fg_hex();
         g_string_append_printf(out,
             ".phone-root { border-color: transparent; background-color: transparent; }"
-            "scrolledwindow, viewport, stack, overlay, .home-page, .ghost-page { background-color: transparent; background-image: none; }"
+            "scrolledwindow, viewport, stack, overlay, .home-page { background-color: transparent; background-image: none; }"
             ".toast-box { background-color: transparent; border: 1px solid %s; }"
             ".toast-label { color: %s; }"
             "entry, textview, textview text { background-color: transparent; color: %s; caret-color: %s; }"
             "scrollbar, scrollbar slider, scrollbar trough { background: transparent; }"
-            ".ghost-page button, .ghost-page label, .home-page label { color: %s; }", fg, fg, fg, fg, fg);
+            ".ghost-page button label, .home-page label { color: %s; }", fg, fg, fg, fg, fg);
     }
     return g_string_free(out, FALSE);
 }

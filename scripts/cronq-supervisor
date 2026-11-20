@@ -1,30 +1,18 @@
 #!/usr/bin/env bash
 set -u
-
 DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/cronq"
 CRASH_LOG="$DATA_DIR/crash.log"
-BIN_PATH="${HOME}/.local/bin/cronq"
-
-# Fallback to local build if not yet installed in ~/.local/bin
+BIN_PATH="${CRONQ_BIN:-${HOME}/.local/bin/cronq}"
 if [ ! -x "$BIN_PATH" ]; then
     DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
     BIN_PATH="$DIR/bin/cronq"
 fi
-
+[ -x "$BIN_PATH" ] || { echo 'Cronq executable not found' >&2; exit 1; }
 mkdir -p "$DATA_DIR"
-
-# Rotate the crash log at startup (keep one previous generation, 1 MiB limit)
 if [ -f "$CRASH_LOG" ] && [ "$(stat -c %s "$CRASH_LOG" 2>/dev/null || echo 0)" -gt 1048576 ]; then
     mv -f "$CRASH_LOG" "$CRASH_LOG.1"
 fi
-
-# Rotate the crash log at startup (keep one previous generation, 1 MiB limit)
-if [ -f "$CRASH_LOG" ] && [ "$(stat -c %s "$CRASH_LOG" 2>/dev/null || echo 0)" -gt 1048576 ]; then
-    mv -f "$CRASH_LOG" "$CRASH_LOG.1"
-fi
-
 CHILD_PID=""
-
 cleanup() {
     if [ -n "$CHILD_PID" ] && kill -0 "$CHILD_PID" 2>/dev/null; then
         kill -TERM "$CHILD_PID" 2>/dev/null || true
@@ -32,20 +20,20 @@ cleanup() {
     fi
     exit 0
 }
-
 trap cleanup SIGINT SIGTERM SIGHUP
-
+delay=2
 while true; do
+    started=$SECONDS
     "$BIN_PATH" "$@" &
     CHILD_PID=$!
     wait "$CHILD_PID"
     EXIT_CODE=$?
-
-    # Normal clean exit (code 0 or terminated by signal 15 / SIGTERM)
-    if [ $EXIT_CODE -eq 0 ] || [ $EXIT_CODE -eq 143 ]; then
-        break
-    fi
-
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Cronq crashed/exited with code $EXIT_CODE. Restarting in 2s..." >> "$CRASH_LOG"
-    sleep 2
-done
+    CHILD_PID=""
+    case "$EXIT_CODE" in 0|3|130|143) break;; esac
+    [ $((SECONDS-started)) -lt 60 ] || delay=2
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Cronq exited with code $EXIT_CODE. Restarting hidden in ${delay}s..." >> "$CRASH_LOG"
+    sleep "$delay" &
+    CHILD_PID=$!; wait "$CHILD_PID"; CHILD_PID=""
+    delay=$((delay*2));[ "$delay" -le 60 ] || delay=60
+    set -- --daemon
+ done

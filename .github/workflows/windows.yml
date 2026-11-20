@@ -7,26 +7,27 @@ on:
     tags: ['v*']
 
 jobs:
-  linux-untouched:
-    # Windows work must never modify the Linux implementation.
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+  linux:
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Fail if Linux files changed
-        env:
-          BASE_REF: ${{ github.base_ref }}
+      - name: Install Linux dependencies
         run: |
-          windows_changed=$(git diff --name-only "origin/$BASE_REF...HEAD" -- windows shared antigravity .github/workflows/windows.yml)
-          [ -n "$windows_changed" ] || exit 0
-          changed=$(git diff --name-only "origin/$BASE_REF...HEAD" -- src Makefile scripts install.sh uninstall.sh tests cronq.desktop)
-          if [ -n "$changed" ]; then
-            echo "Windows branch touches Linux files:"; echo "$changed"; exit 1
-          fi
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev libx11-dev libxi-dev libxext-dev libxrandr-dev libxtst-dev xserver-xephyr xvfb dbus-x11 xdotool xclip x11-xserver-utils
+      - name: Build Linux
+        run: make -j2 all tests/linux_runtime_test
+      - name: Isolated Linux acceptance tests
+        run: xvfb-run -a make test
+      - name: Package Linux release
+        run: bash scripts/make-linux-dist.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cronq-linux
+          path: dist/*
 
   build:
+    needs: linux
     runs-on: windows-latest
     permissions:
       contents: write
@@ -67,13 +68,18 @@ jobs:
           path: |
             windows/dist/cronq-setup.exe
             windows/dist/SHA256SUMS.txt
+      - uses: actions/download-artifact@v4
+        if: startsWith(github.ref, 'refs/tags/v')
+        with:
+          name: cronq-linux
+          path: linux-dist
       - name: Publish GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
         run: |
           $tag = $env:RELEASE_TAG
           if ($tag -ne "v$((Get-Content windows/VERSION -Raw).Trim())") { throw 'Release tag does not match Windows version' }
-          gh release create $tag windows/dist/cronq-setup.exe windows/dist/SHA256SUMS.txt `
+          gh release create $tag windows/dist/cronq-setup.exe windows/dist/SHA256SUMS.txt linux-dist/cronq-linux-x86_64.tar.gz linux-dist/SHA256SUMS-linux.txt `
             --title $tag --notes-file "windows/$tag.md" --latest
           if ($LASTEXITCODE -ne 0) { throw 'GitHub release publication failed' }
         env:

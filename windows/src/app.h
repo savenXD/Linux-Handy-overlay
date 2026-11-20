@@ -12,9 +12,5 @@ std::string HandleCommand(const std::string& line);
 // Handles WM_CRONQ_* messages forwarded by the overlay window procedure.
 LRESULT OnAppMessage(UINT msg, WPARAM wParam, LPARAM lParam);
 
-// Test entry text used by the GET/SET/CLEAR_TEST_ENTRY commands.
-const std::string& TestEntryText();
-void SetTestEntryText(const std::string& text, bool notifyUi = true);
-
 }  // namespace app
 }  // namespace cronq

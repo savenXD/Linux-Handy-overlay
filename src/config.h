@@ -13,17 +13,13 @@ typedef struct {
     char        monitor[32];     /* "primary" or "0", "1", ... */
     double      opacity;         /* 0.1 to 1.0 */
     bool        start_visible;
-    KeyMode     default_key_mode;
 
-    char        home_url[512];
-    char        search_url_template[512];
-    char        user_agent[512];
     char        chatgpt_allowlist[512];
 
     char        toggle_key;      /* default 'x' */
     char        mode_key;        /* default 'm' */
     char        ghost_key;       /* default 'g' */
-    char        snap_key;        /* default 's' */
+    char        snap_key;        /* default 'p' */
 
     bool        shield_clipboard_keys; /* default true */
 
@@ -32,13 +28,7 @@ typedef struct {
     bool        snap_save;       /* default true */
     int         snap_keep_count; /* default 20 */
 
-    char        ghost_writer_key; /* default 'w' */
-    int         ghost_delay_ms;   /* default 0 */
-    char        ghost_newline[32];/* "space" (default), "return", "skip" */
-    char        ghost_tab[32];    /* "space" (default), "tab", "skip" */
-    int         ghost_max_chars;  /* default 100000 (0 = unlimited) */
-
-    /* [Appearance] mode: 0 Dark, 1 Light, 2 Camouflage black text, 3 Camouflage white text; -1 (unset) = camouflage with text colour following the system theme */
+    /* [Appearance] mode: 0 Dark, 1 Light, 2 Camouflage black text (default), 3 Camouflage white text */
     int         appearance_mode;
 
     /* [Privacy] hide_from_capture: hide the overlay while another program captures the screen (default true) */

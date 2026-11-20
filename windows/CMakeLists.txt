@@ -41,15 +41,13 @@ set(CORE_SOURCES
     src/hotkey.cpp
     src/ipc.cpp
     src/app.cpp
-    src/browser_logic.cpp
+    src/chat_logic.cpp
     src/jsonlite.cpp
-    src/browser.cpp
+    src/chat_view.cpp
     src/ui_bridge.cpp
     src/focus_guard.cpp
     src/god_copy.cpp
     src/god_copy_worker.cpp
-    src/ghost.cpp
-    src/ghost_logic.cpp
     src/ini_writer.cpp
     src/key_translate.cpp
     src/snap.cpp
@@ -109,7 +107,7 @@ if(CRONQ_WEBVIEW2)
     endforeach()
     add_executable(webview2_compile_check tests/webview2_compile_check.cpp)
     target_link_libraries(webview2_compile_check PRIVATE cronq_core)
-    add_executable(browser_runtime_test tests/browser_runtime_test.cpp)
+    add_executable(chat_runtime_test tests/chat_runtime_test.cpp)
     add_executable(theme_runtime_test tests/theme_runtime_test.cpp)
     target_link_libraries(theme_runtime_test PRIVATE cronq_core)
     add_dependencies(theme_runtime_test cronq_ui)
@@ -118,13 +116,13 @@ if(CRONQ_WEBVIEW2)
     else()
         target_link_options(theme_runtime_test PRIVATE -static)
     endif()
-    target_link_libraries(browser_runtime_test PRIVATE cronq_core shlwapi)
+    target_link_libraries(chat_runtime_test PRIVATE cronq_core shlwapi)
     if(MSVC)
-        target_compile_options(browser_runtime_test PRIVATE /utf-8)
+        target_compile_options(chat_runtime_test PRIVATE /utf-8)
     else()
-        target_link_options(browser_runtime_test PRIVATE -static)
+        target_link_options(chat_runtime_test PRIVATE -static)
     endif()
-    add_dependencies(browser_runtime_test cronq_ui)
+    add_dependencies(chat_runtime_test cronq_ui)
     if(NOT MSVC)
         target_link_options(webview2_compile_check PRIVATE -static)
     endif()
@@ -178,13 +176,13 @@ if(Python3_Interpreter_FOUND)
 endif()
 add_executable(config_test tests/config_test.cpp)
 target_link_libraries(config_test PRIVATE cronq_core)
-set(CRONQ_FIXTURE "${CMAKE_CURRENT_SOURCE_DIR}/../shared/fixtures/config_defaults.ini")
+set(CRONQ_FIXTURE "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/config_defaults.ini")
 if(CMAKE_CROSSCOMPILING AND NOT CMAKE_HOST_WIN32)
     set(CRONQ_FIXTURE "Z:${CRONQ_FIXTURE}")
 endif()
 add_test(NAME config_parser COMMAND config_test "${CRONQ_FIXTURE}")
 
-foreach(t god_copy_protocol_test capture_logic_test browser_logic_test jsonlite_test log_rotate_test geometry_test ghost_logic_test snap_logic_test ini_writer_test key_translate_test input_logic_test lock_logic_test theme_logic_test image_logic_test image_codec_test crash_report_test recovery_logic_test purge_logic_test update_logic_test)
+foreach(t god_copy_protocol_test capture_logic_test chat_logic_test jsonlite_test log_rotate_test geometry_test snap_logic_test ini_writer_test key_translate_test input_logic_test lock_logic_test theme_logic_test image_logic_test image_codec_test crash_report_test recovery_logic_test purge_logic_test update_logic_test)
     add_executable(${t} tests/${t}.cpp)
     target_link_libraries(${t} PRIVATE cronq_core)
     if(MSVC)
@@ -207,7 +205,7 @@ add_test(NAME parity_config
 
 # MinGW / llvm-mingw: link every executable statically so there are no libc++/libgcc DLLs to ship or lose.
 if(NOT MSVC)
-    foreach(t cronq cronqw sendkeys config_test god_copy_protocol_test capture_logic_test browser_logic_test jsonlite_test log_rotate_test geometry_test parity_config_test ghost_logic_test snap_logic_test ini_writer_test key_translate_test input_logic_test lock_logic_test theme_logic_test image_logic_test image_codec_test crash_report_test recovery_logic_test purge_logic_test update_logic_test)
+    foreach(t cronq cronqw sendkeys config_test god_copy_protocol_test capture_logic_test chat_logic_test jsonlite_test log_rotate_test geometry_test parity_config_test snap_logic_test ini_writer_test key_translate_test input_logic_test lock_logic_test theme_logic_test image_logic_test image_codec_test crash_report_test recovery_logic_test purge_logic_test update_logic_test)
         target_link_options(${t} PRIVATE -static)
     endforeach()
 endif()

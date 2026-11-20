@@ -3,12 +3,12 @@
 #include "raise.h"
 #include "input.h"
 #include "config.h"
-#include "browser.h"
-#include "ghost.h"
+#include "chat_view.h"
 #include "theme.h"
 #include "killswitch.h"
 #include "capture_guard.h"
 #include "xutil.h"
+#include "lifecycle.h"
 
 #include <X11/Xlib.h>
 #include <gtk/gtk.h>
@@ -123,27 +123,23 @@ static gboolean on_ipc_client_connected(GIOChannel *source, GIOCondition conditi
             close(client_fd);
             g_idle_add(on_shutdown_signal, NULL);
             return G_SOURCE_CONTINUE;
-        } else if (g_ascii_strcasecmp(line, "MODE mirror") == 0) {
-            input_set_key_mode(KEY_MODE_MIRROR);
-        } else if (g_ascii_strcasecmp(line, "MODE exclusive") == 0) {
-            input_set_key_mode(KEY_MODE_EXCLUSIVE);
+        } else if (g_ascii_strcasecmp(line, "MODE normal") == 0) {
+            input_set_typing_target(TYPING_TARGET_NONE);
+        } else if (g_ascii_strcasecmp(line, "MODE overlay") == 0) {
+            input_set_typing_target(TYPING_TARGET_OVERLAY);
         } else if (g_ascii_strcasecmp(line, "MODE") == 0) {
-            input_cycle_key_mode();
+            input_toggle_typing_target();
         } else if (g_ascii_strcasecmp(line, "GHOST on") == 0) {
             input_set_ghost_mode(GHOST_MODE_ON);
         } else if (g_ascii_strcasecmp(line, "GHOST off") == 0) {
             input_set_ghost_mode(GHOST_MODE_OFF);
         } else if (g_ascii_strcasecmp(line, "GHOST") == 0) {
             input_toggle_ghost_mode();
-        } else if (g_str_has_prefix(line, "LOAD ")) {
-            const char *url = line + 5;
-            while (*url == ' ') url++;
-            overlay_switch_app("browser");
-            browser_load_in_browser(url);
         } else if (g_str_has_prefix(line, "APP ")) {
             const char *app = line + 4;
             while (*app == ' ') app++;
-            overlay_switch_app(app);
+            if (!g_ascii_strcasecmp(app,"home") || !g_ascii_strcasecmp(app,"chatgpt")) overlay_switch_app(app);
+            else snprintf(resp,sizeof(resp),"UNKNOWN_APP\n");
         } else if (g_ascii_strcasecmp(line, "BACK") == 0) {
             overlay_back();
         } else if (g_ascii_strcasecmp(line, "HOME") == 0) {
@@ -153,30 +149,12 @@ static gboolean on_ipc_client_connected(GIOChannel *source, GIOCondition conditi
         } else if (g_ascii_strcasecmp(line, "UNIVERSAL_RESET") == 0 ||
                    g_ascii_strcasecmp(line, "RESET") == 0) {
             overlay_universal_reset();
-        } else if (g_ascii_strcasecmp(line, "GET_TEST_ENTRY") == 0) {
-            const char *entry_txt = overlay_get_test_entry_text();
-            size_t elen = strlen(entry_txt);
-            ssize_t w = write(client_fd, entry_txt, elen);
-            (void)w;
-            w = write(client_fd, "\n", 1);
-            (void)w;
-            g_free(buf);
-            close(client_fd);
-            return G_SOURCE_CONTINUE;
-        } else if (g_ascii_strcasecmp(line, "CLEAR_TEST_ENTRY") == 0) {
-            overlay_clear_entry_text();
-        } else if (g_str_has_prefix(line, "SET_TEST_ENTRY")) {
-            const char *txt = line + 14;
-            while (*txt == ' ') txt++;
-            overlay_set_entry_text(txt);
         } else if (g_ascii_strcasecmp(line, "HAS_MODAL") == 0) {
             snprintf(resp, sizeof(resp), "%s\n", overlay_has_popup_modal() ? "TRUE" : "FALSE");
         } else if (g_ascii_strcasecmp(line, "CLOSE_MODAL") == 0) {
             overlay_close_popup_modal();
         } else if (g_ascii_strcasecmp(line, "SNAP") == 0) {
             overlay_snap();
-        } else if (g_ascii_strcasecmp(line, "GHOST_WRITE") == 0) {
-            ghost_writer_run();
         } else if (g_ascii_strcasecmp(line, "PASTE") == 0) {
             overlay_execute_clipboard_action(CLIPBOARD_ACTION_PASTE);
         } else if (g_str_has_prefix(line, "SET_OPACITY ")) {
@@ -230,14 +208,14 @@ static gboolean on_ipc_client_connected(GIOChannel *source, GIOCondition conditi
         } else if (g_ascii_strcasecmp(line, "KILL_PROMPT_ACTIVE") == 0) {
             snprintf(resp, sizeof(resp), "%s\n", killswitch_prompt_active() ? "TRUE" : "FALSE");
         } else if (g_ascii_strcasecmp(line, "STATUS") == 0) {
-            snprintf(resp, sizeof(resp), "MODE=%s TARGET=%s GHOST=%s GRAB=%s VISIBLE=%s APP=%s\n",
-                     input_get_key_mode() == KEY_MODE_EXCLUSIVE ? "EXCLUSIVE" : "MIRROR",
+            snprintf(resp, sizeof(resp), "MODE=%s TARGET=%s GHOST=%s GRAB=%s VISIBLE=%s APP=%s LOCKED=%s APPEARANCE=%d\n",
+                     input_get_typing_target()==TYPING_TARGET_OVERLAY ? "OVERLAY" : "NORMAL",
                      input_get_typing_target() == TYPING_TARGET_OVERLAY ? "OVERLAY" : "NONE",
                      input_get_ghost_mode() == GHOST_MODE_ON ? "GHOST" : "SOLID",
                      input_get_grab_status() == GRAB_STATUS_ACTIVE ? "ACTIVE" :
                      (input_get_grab_status() == GRAB_STATUS_FAILED ? "FAILED" : "NONE"),
                      overlay_is_visible() ? "TRUE" : "FALSE",
-                     overlay_get_current_app());
+                     overlay_get_current_app(), hotkey_is_locked()?"TRUE":"FALSE",(int)theme_get_mode());
         } else {
             snprintf(resp, sizeof(resp), "UNKNOWN_COMMAND\n");
         }
@@ -339,12 +317,13 @@ static gboolean on_shutdown_signal(gpointer user_data) {
     (void)user_data;
     xutil_log("MAIN", "Shutdown signal received. Performing clean teardown...");
 
+    lifecycle_cleanup();
+    capture_guard_cleanup();
     overlay_hide();
-    ghost_cleanup();
     input_cleanup();
     raise_cleanup();
     hotkey_cleanup();
-    browser_cleanup();
+    chat_view_cleanup();
     window_cleanup();
     config_cleanup();
     ipc_server_cleanup();
@@ -360,6 +339,24 @@ int main(int argc, char **argv) {
     /* Line-buffered stdout/stderr for immediate log visibility */
     setvbuf(stdout, NULL, _IOLBF, 0);
     setvbuf(stderr, NULL, _IONBF, 0);
+
+    if(argc==2 && (!strcmp(argv[1],"--version") || !strcmp(argv[1],"version"))) {
+        puts("Cronq " CRONQ_VERSION); return 0;
+    }
+    if(argc>=2 && (!strcmp(argv[1],"update") || !strcmp(argv[1],"--update"))) {
+        if(argc>3 || (argc==3 && strcmp(argv[2],"--yes"))) { fputs("Usage: cronq update [--yes]\n",stderr);return 1; }
+        char *binary=g_file_read_link("/proc/self/exe",NULL);
+        if(!binary) { fputs("Cannot locate Cronq executable\n",stderr);return 1; }
+        char *dir=g_path_get_dirname(binary);
+        char *script=g_build_filename(dir,"..","scripts","cronq-update.py",NULL);
+        if(!g_file_test(script,G_FILE_TEST_IS_REGULAR)) {
+            g_free(script);script=g_build_filename(g_get_user_data_dir(),"cronq","update.py",NULL);
+        }
+        if(!g_file_test(script,G_FILE_TEST_IS_REGULAR)) { fputs("Updater is not installed\n",stderr);return 1; }
+        execlp("python3","python3",script,"--current",CRONQ_VERSION,"--binary",binary,
+               argc==3?"--yes":NULL,(char *)NULL);
+        perror("Cannot launch updater"); return 1;
+    }
 
     /* If no arguments passed: if daemon is already running, bring it up! */
     if (argc == 1) {
@@ -404,7 +401,9 @@ int main(int argc, char **argv) {
         } else if (strcmp(argv[i], "--mode") == 0) {
             char cmd[64] = "MODE";
             if (i + 1 < argc && argv[i + 1][0] != '-') {
-                snprintf(cmd, sizeof(cmd), "MODE %s", argv[++i]);
+                const char *mode=argv[++i];
+                if(strcmp(mode,"normal") && strcmp(mode,"overlay")){fprintf(stderr,"Error: --mode expects normal or overlay.\n");return 1;}
+                snprintf(cmd, sizeof(cmd), "MODE %s", mode);
             }
             char resp[256] = {0};
             if (send_ipc_command(cmd, resp, sizeof(resp))) {
@@ -427,28 +426,15 @@ int main(int argc, char **argv) {
                 fprintf(stderr, "Error: Cronq is not running.\n");
                 return 1;
             }
-        } else if (strcmp(argv[i], "--load") == 0) {
-            if (i + 1 >= argc) {
-                fprintf(stderr, "Error: --load requires a URL argument.\n");
-                return 1;
-            }
-            char cmd[1024];
-            snprintf(cmd, sizeof(cmd), "LOAD %s", argv[++i]);
-            char resp[256] = {0};
-            if (send_ipc_command(cmd, resp, sizeof(resp))) {
-                printf("Cronq: Loaded '%s'.\n", argv[i]);
-                return 0;
-            } else {
-                fprintf(stderr, "Error: Cronq is not running.\n");
-                return 1;
-            }
         } else if (strcmp(argv[i], "--app") == 0) {
             if (i + 1 >= argc) {
-                fprintf(stderr, "Error: --app requires an app name (home, chatgpt, browser).\n");
+                fprintf(stderr, "Error: --app requires an app name (home, chatgpt).\n");
                 return 1;
             }
+            const char *app=argv[++i];
+            if(strcmp(app,"home") && strcmp(app,"chatgpt")){fprintf(stderr,"Error: --app expects home or chatgpt.\n");return 1;}
             char cmd[64];
-            snprintf(cmd, sizeof(cmd), "APP %s", argv[++i]);
+            snprintf(cmd, sizeof(cmd), "APP %s", app);
             char resp[256] = {0};
             if (send_ipc_command(cmd, resp, sizeof(resp))) {
                 printf("Cronq: Switched to '%s'.\n", argv[i]);
@@ -481,37 +467,6 @@ int main(int argc, char **argv) {
                 fprintf(stderr, "Error: Cronq is not running.\n");
                 return 1;
             }
-        } else if (strcmp(argv[i], "--get-entry") == 0) {
-            size_t rsize = 131072;
-            char *resp = g_malloc0(rsize);
-            if (send_ipc_command("GET_TEST_ENTRY", resp, rsize)) {
-                printf("%s", resp);
-                g_free(resp);
-                return 0;
-            } else {
-                g_free(resp);
-                fprintf(stderr, "Error: Cronq is not running.\n");
-                return 1;
-            }
-        } else if (strcmp(argv[i], "--set-entry") == 0 && i + 1 < argc) {
-            char *cmd = g_strdup_printf("SET_TEST_ENTRY %s", argv[i + 1]);
-            char resp[256] = {0};
-            bool ok = send_ipc_command(cmd, resp, sizeof(resp));
-            g_free(cmd);
-            if (ok) {
-                return 0;
-            } else {
-                fprintf(stderr, "Error: Cronq is not running.\n");
-                return 1;
-            }
-        } else if (strcmp(argv[i], "--clear-entry") == 0) {
-            char resp[256] = {0};
-            if (send_ipc_command("CLEAR_TEST_ENTRY", resp, sizeof(resp))) {
-                return 0;
-            } else {
-                fprintf(stderr, "Error: Cronq is not running.\n");
-                return 1;
-            }
         } else if (strcmp(argv[i], "--has-modal") == 0) {
             char resp[256] = {0};
             if (send_ipc_command("HAS_MODAL", resp, sizeof(resp))) {
@@ -532,14 +487,6 @@ int main(int argc, char **argv) {
         } else if (strcmp(argv[i], "--snap") == 0 || strcmp(argv[i], "snap") == 0) {
             char resp[256] = {0};
             if (send_ipc_command("SNAP", resp, sizeof(resp))) {
-                return 0;
-            } else {
-                fprintf(stderr, "Error: Cronq is not running.\n");
-                return 1;
-            }
-        } else if (strcmp(argv[i], "--ghost-write") == 0 || strcmp(argv[i], "--ghost-writer") == 0) {
-            char resp[256] = {0};
-            if (send_ipc_command("GHOST_WRITE", resp, sizeof(resp))) {
                 return 0;
             } else {
                 fprintf(stderr, "Error: Cronq is not running.\n");
@@ -637,27 +584,28 @@ int main(int argc, char **argv) {
             printf("  --kill, kill                  Kill running overlay daemon\n");
             printf("  --status, status              Query running overlay status\n");
             printf("  --snap, snap                  Capture screenshot (excluding overlay) to clipboard & disk\n");
-            printf("  --mode [m|e]                  Set or cycle typing mode (mirror / exclusive)\n");
+            printf("  --mode [normal|overlay]       Set or toggle typing target (Alt+M)\n");
             printf("  --ghost [on|off]              Set or toggle GHOST click-through mode\n");
-            printf("  --app <name>                  Switch app view (home, chatgpt, browser)\n");
-            printf("  --load <url>                  Load URL in browser\n");
+            printf("  --app <name>                  Switch app view (home, chatgpt)\n");
             printf("  --back                        Navigate back in current app (or home if at start)\n");
-            printf("  --home                        Return to two-app home screen\n");
+            printf("  --home                        Return to Home screen\n");
             printf("  --reload                      Reload active webview\n");
             printf("  --reset, reset                Reset overlay to new-like state (clear history, reload apps)\n");
             printf("  --opacity <val>               Set overlay opacity (0.20 to 1.00)\n");
             printf("  --size <w> <h>                Set overlay dimensions in pixels\n");
             printf("  --fullscreen                  Toggle fullscreen mode\n");
-            printf("  --default-size                Reset overlay to default dimensions (360x640)\n");
+            printf("  --default-size                Fit default size to monitor work area\n");
             printf("  --get-geometry                Print current overlay geometry (X, Y, W, H)\n");
-            printf("  --get-entry                   Print current text from Test Input\n");
             printf("  --has-modal                   Query if an internal modal popup is displayed\n");
             printf("  --close-modal                 Close internal modal popup if displayed\n");
-            printf("  --ghost-write                 Trigger Ghost Writer keyboard injection\n");
-            printf("  --paste                       Trigger paste into overlay (entry or active webview)\n");
+            printf("  --paste                       Paste clipboard into ChatGPT\n");
             printf("  --reload-config               Reload configuration from config.ini\n");
+            printf("  --version                     Print version\n");
+            printf("  update [--yes]                Check, verify and install a release\n");
             printf("  --help, -h                    Show this help text\n");
             return 0;
+        } else if(strcmp(argv[i],"--show") && strcmp(argv[i],"show") && strcmp(argv[i],"--daemon")) {
+            fprintf(stderr,"Error: unknown option: %s\n",argv[i]);return 1;
         }
     }
 
@@ -674,7 +622,8 @@ int main(int argc, char **argv) {
         }
     }
 
-    xutil_log("MAIN", "=== Starting Cronq ===");
+    crash_report_init();
+    xutil_log("MAIN", "=== Starting Cronq " CRONQ_VERSION " ===");
 
     /* 0. Initialize Xlib multi-threading support for multiple Display connections */
     XInitThreads();
@@ -683,6 +632,7 @@ int main(int argc, char **argv) {
     xutil_install_error_handlers();
 
     /* 2. Initialize GTK */
+    g_setenv("GDK_BACKEND","x11",TRUE);
     gtk_init(&argc, &argv);
 
     /* 3. Initialize Configuration */
@@ -713,20 +663,10 @@ int main(int argc, char **argv) {
         config_cleanup();
         return 1;
     }
-    input_set_key_mode(cfg->default_key_mode);
 
-    /* 5b. Initialize Ghost Writer Subsystem */
-    if (!ghost_init()) {
-        xutil_log_err("MAIN", "Failed to initialize Ghost Writer subsystem.");
-        input_cleanup();
-        ipc_server_cleanup();
-        config_cleanup();
-        return 1;
-    }
-
-    /* 6. Initialize WebKitGTK Browser Subsystem */
-    if (!browser_init()) {
-        xutil_log_err("MAIN", "Failed to initialize browser subsystem.");
+    /* 6. Initialize WebKitGTK ChatView Subsystem */
+    if (!chat_view_init()) {
+        xutil_log_err("MAIN", "Failed to initialize ChatGPT subsystem.");
         input_cleanup();
         ipc_server_cleanup();
         config_cleanup();
@@ -736,7 +676,7 @@ int main(int argc, char **argv) {
     /* 7. Initialize Restack Watcher */
     if (!raise_init()) {
         xutil_log_err("MAIN", "Failed to initialize restack watcher.");
-        browser_cleanup();
+        chat_view_cleanup();
         input_cleanup();
         ipc_server_cleanup();
         config_cleanup();
@@ -747,7 +687,7 @@ int main(int argc, char **argv) {
     if (!window_init(start_visible)) {
         xutil_log_err("MAIN", "Failed to initialize overlay window.");
         raise_cleanup();
-        browser_cleanup();
+        chat_view_cleanup();
         input_cleanup();
         ipc_server_cleanup();
         config_cleanup();
@@ -759,7 +699,7 @@ int main(int argc, char **argv) {
         xutil_log_err("MAIN", "Failed to initialize global hotkey system.");
         window_cleanup();
         raise_cleanup();
-        browser_cleanup();
+        chat_view_cleanup();
         input_cleanup();
         ipc_server_cleanup();
         config_cleanup();
@@ -768,6 +708,7 @@ int main(int argc, char **argv) {
 
     /* 9b. Capture guard: hide the overlay while other programs capture the screen */
     capture_guard_init();
+    lifecycle_init();
 
     /* 10. Setup UNIX signal handlers */
     g_unix_signal_add(SIGINT, on_shutdown_signal, NULL);
@@ -778,9 +719,9 @@ int main(int argc, char **argv) {
     if (!start_visible) {
         printf("\n========================================================================\n");
         printf(" Cronq started in BACKGROUND mode (default: HIDDEN)\n");
-        printf(" - Press [Ctrl] + [Shift] + [Alt] + [%c] to toggle visibility.\n", cfg->toggle_key);
-        printf(" - Press [Ctrl] + [Shift] + [Alt] + [%c] to cycle MIRROR / EXCLUSIVE.\n", cfg->mode_key);
-        printf(" - Press [Ctrl] + [Shift] + [Alt] + [%c] to toggle GHOST mode.\n", cfg->ghost_key);
+        printf(" - Press [Alt] + [%c] to toggle visibility.\n", cfg->toggle_key);
+        printf(" - Press [Alt] + [%c] to toggle NORMAL / OVERLAY typing.\n", cfg->mode_key);
+        printf(" - Press [Alt] + [%c] to toggle GHOST mode.\n", cfg->ghost_key);
         printf(" - CLI control: %s --toggle | --show | --hide | --status\n", argv[0]);
         printf(" - Press [Ctrl] + [C] to exit.\n");
         printf("========================================================================\n\n");

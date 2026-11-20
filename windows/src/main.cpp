@@ -2,9 +2,8 @@
 //   cronq.exe   console build: the command line tool (same commands as the Linux `cronq` script/binary)
 //   cronqw.exe  windowless build: the overlay itself (autostart, Start Menu, supervisor)
 #include "app.h"
-#include "browser.h"
+#include "chat_view.h"
 #include "focus_guard.h"
-#include "ghost.h"
 #include "god_copy.h"
 #include <objbase.h>
 #include "common.h"
@@ -168,15 +167,13 @@ int RunDaemon(bool forceVisible) {
     ipc::SetTarget(overlay::Hwnd());
 
     input::Init(overlay::Hwnd());
-    input::SetKeyMode(cfg.defaultKeyMode);
-    ghost::Init();
+
     snap::Init();
 
     if (!hotkey::Init(overlay::Hwnd())) {
         LogErr("MAIN", "Failed to initialize global hotkey system.");
         snap::Cleanup();
         god_copy::Cleanup();
-        ghost::Cleanup();
         input::Cleanup();
         raise::Cleanup();
         ipc::StopServer();
@@ -185,7 +182,7 @@ int RunDaemon(bool forceVisible) {
     }
     focus_guard::Init(overlay::Hwnd());
     theme::Init();
-    browser::Init(overlay::Hwnd());
+    chat_view::Init(overlay::Hwnd());
     SetConsoleCtrlHandler(ConsoleCtrlHandler, TRUE);
 
     if (!startVisible) {
@@ -203,12 +200,11 @@ int RunDaemon(bool forceVisible) {
     Log("MAIN", "Shutdown: performing clean teardown...");
     theme::Cleanup();
     god_copy::Cleanup();
-    ghost::Cleanup();
     snap::Cleanup();
     input::Cleanup();
     hotkey::Cleanup();
     focus_guard::Cleanup();
-    browser::Cleanup();
+    chat_view::Cleanup();
     raise::Cleanup();
     ipc::StopServer();  // waits (briefly) for an in-flight reply such as KILL's "OK"
     overlay::Cleanup();
@@ -304,12 +300,11 @@ int Help(const char* prog) {
     printf("  --snap, snap                  Capture screenshot (excluding overlay) to clipboard & disk\n");
     printf("  --snap-wgc, snap-wgc          Temporary Windows 11 WGC screenshot test (Alt+O)\n");
     printf("  --snap-wgc-window             Foreground-window WGC test (Alt+Shift+O)\n");
-    printf("  --mode [m|e]                  Set or cycle typing mode (mirror / exclusive)\n");
+    printf("  --mode [normal|overlay]       Set or toggle the typing target (Alt+M)\n");
     printf("  --ghost [on|off]              Set or toggle GHOST click-through mode\n");
-    printf("  --app <name>                  Switch app view (home, chatgpt, browser)\n");
-    printf("  --load <url>                  Load URL in browser\n");
+    printf("  --app <name>                  Switch app view (home, chatgpt)\n");
     printf("  --back                        Navigate back in current app (or home if at start)\n");
-    printf("  --home                        Return to two-app home screen\n");
+    printf("  --home                        Return to home screen\n");
     printf("  --reload                      Reload active webview\n");
     printf("  --reset, reset                Reset overlay to new-like state (clear history, reload apps)\n");
     printf("  --opacity <val>               Set overlay opacity (0.20 to 1.00)\n");
@@ -317,11 +312,9 @@ int Help(const char* prog) {
     printf("  --fullscreen                  Toggle fullscreen mode\n");
     printf("  --default-size                Reset overlay to default dimensions (360x640)\n");
     printf("  --get-geometry                Print current overlay geometry (X, Y, W, H)\n");
-    printf("  --get-entry                   Print current text from Test Input\n");
     printf("  --has-modal                   Query if an internal modal popup is displayed\n");
     printf("  --close-modal                 Close internal modal popup if displayed\n");
-    printf("  --ghost-write                 Trigger Ghost Writer keyboard injection\n");
-    printf("  --paste                       Trigger paste into overlay (entry or active webview)\n");
+    printf("  --paste                       Trigger text/image paste into ChatGPT\n");
     printf("  --reload-config               Reload configuration from config.ini\n");
     printf("  update [--yes]                Check GitHub for a newer version and install it (manual only)\n");
     printf("  --version                     Print the version\n");
@@ -388,10 +381,10 @@ int RunCli(const std::vector<std::string>& args) {
             std::string cmd = "MODE";
             if (i + 1 < args.size() && args[i + 1][0] != '-') {
                 std::string m = args[++i];
-                if (m == "m")
-                    m = "mirror";
-                else if (m == "e")
-                    m = "exclusive";
+                if (m != "normal" && m != "overlay") {
+                    fprintf(stderr, "Error: --mode expects normal or overlay.\n");
+                    return 1;
+                }
                 cmd += " " + m;
             }
             std::string resp;
@@ -411,20 +404,16 @@ int RunCli(const std::vector<std::string>& args) {
             }
             printf("Cronq: %s\n", Trim(resp).c_str());
             return 0;
-        } else if (is("--load")) {
-            if (i + 1 >= args.size()) {
-                fprintf(stderr, "Error: --load requires a URL argument.\n");
-                return 1;
-            }
-            const std::string& url = args[++i];
-            std::string okMsg = "Cronq: Loaded '" + url + "'.";
-            return Remote("LOAD " + url, okMsg.c_str());
         } else if (is("--app")) {
             if (i + 1 >= args.size()) {
-                fprintf(stderr, "Error: --app requires an app name (home, chatgpt, browser).\n");
+                fprintf(stderr, "Error: --app requires an app name (home, chatgpt).\n");
                 return 1;
             }
             const std::string& name = args[++i];
+            if (!EqNoCase(name, "home") && !EqNoCase(name, "chatgpt")) {
+                fprintf(stderr, "Error: --app expects home or chatgpt.\n");
+                return 1;
+            }
             std::string okMsg = "Cronq: Switched to '" + name + "'.";
             return Remote("APP " + name, okMsg.c_str());
         } else if (is("--back")) {
@@ -433,12 +422,6 @@ int RunCli(const std::vector<std::string>& args) {
             return Remote("HOME", nullptr);
         } else if (is("--reload")) {
             return Remote("RELOAD", nullptr);
-        } else if (is("--get-entry")) {
-            return Remote("GET_TEST_ENTRY", nullptr, true);
-        } else if (is("--set-entry") && i + 1 < args.size()) {
-            return Remote("SET_TEST_ENTRY " + args[i + 1], nullptr);
-        } else if (is("--clear-entry")) {
-            return Remote("CLEAR_TEST_ENTRY", nullptr);
         } else if (is("--has-modal")) {
             return Remote("HAS_MODAL", nullptr, true);
         } else if (is("--close-modal")) {
@@ -449,8 +432,6 @@ int RunCli(const std::vector<std::string>& args) {
             return Remote("SNAP_WGC", nullptr);
         } else if (is("--snap-wgc-window") || is("snap-wgc-window")) {
             return Remote("SNAP_WGC_WINDOW", nullptr);
-        } else if (is("--ghost-write") || is("--ghost-writer")) {
-            return Remote("GHOST_WRITE", nullptr);
         } else if (is("--paste")) {
             return Remote("PASTE", nullptr);
         } else if (is("--reset") || is("--refresh-all") || is("reset")) {

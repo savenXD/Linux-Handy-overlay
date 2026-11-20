@@ -28,14 +28,6 @@ const char* const kDefaultIni =
     "monitor = primary\n"
     "opacity = 1.0\n"
     "start_visible = false\n"
-    "# Options: mirror, exclusive\n"
-    "default_key_mode = mirror\n"
-    "\n"
-    "[Browser]\n"
-    "home_url = https://html5test.com\n"
-    "search_url_template = https://duckduckgo.com/?q=%s\n"
-    "user_agent = Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/124.0.0.0 Mobile Safari/537.36\n"
     "\n"
     "[Hotkeys]\n"
     "# Shortcuts combine Alt + <key> (Alt+X=Toggle, Alt+G=Ghost, Alt+A/S=Opacity, Alt+F=Fullscreen, "
@@ -44,22 +36,13 @@ const char* const kDefaultIni =
     "mode_key = m\n"
     "ghost_key = g\n"
     "snap_key = p\n"
-    "ghost_writer_key = w\n"
     "\n"
     "[Snap]\n"
     "# Options: monitor (primary), all (all screens)\n"
     "snap_scope = monitor\n"
     "snap_delay_ms = 80\n"
     "snap_save = true\n"
-    "snap_keep_count = 20\n"
-    "\n"
-    "[GhostWriter]\n"
-    "ghost_delay_ms = 0\n"
-    "# Options: space, return, skip\n"
-    "ghost_newline = space\n"
-    "# Options: space, tab, skip\n"
-    "ghost_tab = space\n"
-    "ghost_max_chars = 100000\n";
+    "snap_keep_count = 20\n";
 
 // section -> key -> value, mirroring GKeyFile: '#' starts a comment line, keys are case-sensitive.
 using Ini = std::map<std::string, std::map<std::string, std::string>>;
@@ -181,16 +164,10 @@ void ParseInto(const std::string& text, AppConfig* cfg) {
     if (GetStr(ini, "General", "monitor", &s)) cfg->monitor = s;
     if (GetDouble(ini, "General", "opacity", &d) && d >= 0.1 && d <= 1.0) cfg->opacity = d;
     if (GetBool(ini, "General", "start_visible", &b)) cfg->startVisible = b;
-    if (const std::string* km = Find(ini, "General", "default_key_mode")) {
-        cfg->defaultKeyMode = EqNoCase(*km, "exclusive") ? KeyMode::Exclusive : KeyMode::Mirror;
-    }
-
-    // [Browser]
+    // Appearance and ChatGPT
     if (GetInt(ini, "Appearance", "mode", &i) && i >= 0 && i <= 3) cfg->appearanceMode = i;
-    if (GetStr(ini, "Browser", "home_url", &s)) cfg->homeUrl = s;
-    if (GetStr(ini, "Browser", "search_url_template", &s)) cfg->searchUrlTemplate = s;
-    if (GetStr(ini, "Browser", "user_agent", &s)) cfg->userAgent = s;
-    if (GetStr(ini, "Browser", "chatgpt_allowlist", &s)) cfg->chatgptAllowlist = s;
+    if (GetStr(ini, "ChatGPT", "allowlist", &s) ||
+        GetStr(ini, "Browser", "chatgpt_allowlist", &s)) cfg->chatgptAllowlist = s;
 
     // [Privacy]
     if (GetBool(ini, "Privacy", "hide_from_capture", &b)) cfg->hideFromCapture = b;
@@ -209,14 +186,6 @@ void ParseInto(const std::string& text, AppConfig* cfg) {
     if (GetBool(ini, "Snap", "snap_save", &b)) cfg->snapSave = b;
     if (GetInt(ini, "Snap", "snap_keep_count", &i) && i >= 1 && i <= 500) cfg->snapKeepCount = i;
 
-    // [GhostWriter]; ghost_writer_key: [Hotkeys] first, then [GhostWriter]
-    if (GetStr(ini, "Hotkeys", "ghost_writer_key", &s) || GetStr(ini, "GhostWriter", "ghost_writer_key", &s)) {
-        cfg->ghostWriterKey = s[0];
-    }
-    if (GetInt(ini, "GhostWriter", "ghost_delay_ms", &i) && i >= 0 && i <= 5000) cfg->ghostDelayMs = i;
-    if (GetStr(ini, "GhostWriter", "ghost_newline", &s)) cfg->ghostNewline = s;
-    if (GetStr(ini, "GhostWriter", "ghost_tab", &s)) cfg->ghostTab = s;
-    if (GetInt(ini, "GhostWriter", "ghost_max_chars", &i) && i >= 0 && i <= 5000000) cfg->ghostMaxChars = i;
 }
 
 bool Init() {
@@ -228,9 +197,8 @@ bool Init() {
     std::string text;
     if (ReadFileText(g_path, &text)) {
         ParseInto(text, &g_cfg);
-        Log("CONFIG", "Loaded configuration from '%s' (%dx%d, corner=%s, monitor=%s, home='%s').",
-            Narrow(g_path).c_str(), g_cfg.width, g_cfg.height, g_cfg.corner.c_str(), g_cfg.monitor.c_str(),
-            g_cfg.homeUrl.c_str());
+        Log("CONFIG", "Loaded configuration from '%s' (%dx%d, corner=%s, monitor=%s).",
+            Narrow(g_path).c_str(), g_cfg.width, g_cfg.height, g_cfg.corner.c_str(), g_cfg.monitor.c_str());
     } else {
         LogErr("CONFIG", "Failed to load config '%s'. Using defaults.", Narrow(g_path).c_str());
     }

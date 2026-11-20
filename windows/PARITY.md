@@ -40,8 +40,8 @@ These checks use an isolated local ChatGPT-style fixture for browser styling. Th
 ChatGPT OAuth, every third-party page, games, IME/layout combinations, or all multi-monitor configurations.
 The older per-feature statuses below remain the evidence baseline for features outside these checks.
 
-This is the integration audit from 2026-10-22. It supersedes broad verification claims in the individual
-phase reports. Windows uses the Linux implementation as its behavior reference; native Windows acceptance
+The remaining rows below retain historical evidence from the integration audit of 2026-10-22; they must not be interpreted as fresh acceptance of the current refactor. It supersedes broad verification claims in the individual
+phase reports. Windows retains shared behavior for the surviving features; its configuration defaults are now independently maintained, and native Windows acceptance
 is still required before calling the port complete.
 
 - **VERIFIED (Wine)** means the specific behavior was exercised under Wine. WebView2 was unavailable, so
@@ -60,23 +60,19 @@ is still required before calling the port complete.
 | Alt+P capture | DXGI primary + GDI fallback; padded rows/rotations unit-tested; real GDI pixels, black rejection, cancellation, daemon PNG/clipboard equality and clipboard contention VERIFIED (Wine) | Focus-app acceptance unsuccessful by user report; actual backend/error unconfirmed. Controlled native DXGI/protection checks PENDING; see SCREENSHOT_INVESTIGATION.md |
 | Alt+O temporary WGC experiment | Separate WGC-only backend, shortcut and output folder; cross-build and unavailable-backend behavior exercised | No successful focus-app result; precheck can prevent WGC call. Controlled native frames PENDING; `capture_runtime_test --require-wgc` |
 | Alt+Shift+O WGC window / GPU recovery | Foreground-window WGC item dimensions, monitor-associated GPU selection, one device-loss retry, explicit diagnostics | No successful focus-app result; native window pixels, hybrid GPUs and device-loss validation PENDING; `capture_runtime_test --require-wgc-window` |
-| Alt+W start/cancel | External EDIT receives exact text; cancellation while guard is active stops typing | VERIFIED (Wine); application-specific input: 12–14 |
-| Mirror / Exclusive routing | Press, release, repeat, shield, target change and guard routing unit tests; mouse activation and hide-release in native receiver | UNIT TESTED + partial VERIFIED (Wine); WebView2: 8–10 |
+| Normal / overlay-only typing | Alt+M selects the target; hook swallows overlay keys and preserves key-up ownership. Runtime fixture checks foreground/edit focus and delivery to the underlying app. | Cross-build + Wine checks; live WebView2 acceptance: 8–10 |
 | Modifier snapshots, layout translation | Pure key table tests; captures modifier/scan/lock/repeat state at hook time | UNIT TESTED; native layouts, AltGr, IME: 8 |
 | Clipboard shield and paste | Dispatch implemented; DIB24/32 conversion bounds and PNG codec tested | UNIT TESTED; real text/image paste and stale-image regression: 10 |
-| Human writer timing and Extra safe repair | Seeded timing/typo simulation and exact reconstructed output tests; external human typing | UNIT TESTED + VERIFIED (Wine); long text/settings/ETA: 12–14 |
-| Instant Unicode writer | 512-character batch case plus accents, CJK and emoji in external EDIT | VERIFIED (Wine); target compatibility: 13 |
-| Writer cleanup / focus change | Alt+W cancel, Reset cancel, letter release, focus-away-and-back regression | VERIFIED (Wine); lock/sleep and Caps Lock: 14 |
 | Native WebView2 views and persistent profile | SDK compile check, lifecycle/source/ownership review; graceful missing-runtime fallback | UNVERIFIED (Windows): 6–9 |
-| URLs, allowlist, history policy, ChatGPT script | Browser pure tests; app switching/Back/Reset fallback checks | UNIT TESTED; actual page navigation/OAuth: 6, 7 |
+| ChatGPT allowlist, history policy and script | ChatGPT pure tests; ChatGPT/Home switching and Back/Reset fallback checks | UNIT TESTED; actual page navigation/OAuth: 6, 7 |
 | Popups | Uses the live popup controller as key target; closes stale requests/deferrals safely | UNVERIFIED (Windows): 7, 8 |
-| Reset behavior | Home + Mirror + Solid; releases routing and cancels writer | VERIFIED (Wine), matching owner's Linux choice |
+| Reset behavior | Home + Normal typing + Solid; releases routing and clears retained text | VERIFIED (Wine), matching owner's Linux choice |
 | Toast layering | Windowed WebView content reserves room during the 2.2-second toast | UNVERIFIED (Windows): 3, 6 |
 | Drag/resize and height maximize | Implemented; corner math covers taskbars and offset monitors | UNIT TESTED math; native interaction: 3, 5 |
 | Invalid monitor index | Runtime falls back to actual primary monitor, not enumeration index zero | Source reviewed; UNVERIFIED (Windows): 5 |
 | DPI movement | Preserves physical rectangle, updates control scale; Default Size uses current DPI | DIFFERENT (intentional); UNVERIFIED (Windows): 5 |
 | Stay-on-top loop guard | Token bucket and watcher implemented; basic topmost operation in Wine | Games, competing topmost windows and rate limiting UNVERIFIED (Windows): 3, 17 |
-| Resume/unlock / Explorer restart | Explicit hook reinstall and topmost recovery; lock/suspend cancel writer and routing | UNVERIFIED (Windows): 16 |
+| Resume/unlock / Explorer restart | Explicit hook reinstall and topmost recovery; lock/suspend release routing | UNVERIFIED (Windows): 16 |
 | CLI and IPC | Smoke exercises status, geometry, visibility, size, opacity, modes, app state, Back, modal query, Reset and kill | VERIFIED (Wine) for those paths; browser actions require 6, 7 |
 | Supervisor | Force-killed child restarts; clean kill stops supervision and restart history is written | VERIFIED (Wine); real sign-in behavior: 2 |
 | Crash diagnostics | Deliberate child exception produces exception/module-offset/x64-register report and nonzero exit | VERIFIED (Wine) |
@@ -87,7 +83,7 @@ is still required before calling the port complete.
 | MSVC build | v1.3.0 main/release Windows CI passed native build, CTest, installer regressions and packaging | VERIFIED (CI); interactive desktop/focus-app acceptance remains separate; links in SCREENSHOT_INVESTIGATION.md |
 | Stability | Full fixed-binary memory soak and smoke logs recorded in integration report | Wine has no usable handle counter; native WebView2/handle/GDI soak: 17 |
 
-## Configuration keys Parity (`config.ini`)
+## Configuration keys (`config.ini`)
 
 Verified by automated parity test: `windows/tests/parity_config_test.cpp`.
 
@@ -100,35 +96,22 @@ Verified by automated parity test: `windows/tests/parity_config_test.cpp`.
 | `[General]` | `monitor` | `primary` | `primary` | `primary`, index | **UNIT TESTED** |
 | `[General]` | `opacity` | 1.0 | 1.0 | 0.1..1.0 | **UNIT TESTED** |
 | `[General]` | `start_visible` | false | false | boolean | **UNIT TESTED** |
-| `[General]` | `default_key_mode` | `mirror` | `mirror` | `mirror`, `exclusive` | **UNIT TESTED** |
-| `[Browser]` | `home_url` | `https://html5test.com` | `https://html5test.com` | URL string | **UNIT TESTED** |
-| `[Browser]` | `search_url_template` | `https://duckduckgo.com/?q=%s` | `https://duckduckgo.com/?q=%s` | Template | **UNIT TESTED** |
-| `[Browser]` | `user_agent` | Pixel 8 UA | Pixel 8 UA | String | **UNIT TESTED** |
-| `[Browser]` | `chatgpt_allowlist` | 18 domains | 18 domains | Comma-separated | **UNIT TESTED** |
+| `[ChatGPT]` | `allowlist` | 18 domains | 18 domains | Comma-separated | **UNIT TESTED** |
 | `[Hotkeys]` | `toggle_key` | `x` | `x` | char | **UNIT TESTED** |
 | `[Hotkeys]` | `mode_key` | `m` | `m` | char | **UNIT TESTED** |
 | `[Hotkeys]` | `ghost_key` | `g` | `g` | char | **UNIT TESTED** |
 | `[Hotkeys]` | `snap_key` | `p` | `p` | char | **UNIT TESTED** |
-| `[Hotkeys]` | `ghost_writer_key` | `w` | `w` | char | **UNIT TESTED** |
 | `[Hotkeys]` | `shield_clipboard_keys` | true | true | boolean | **UNIT TESTED** |
 | `[Snap]` | `snap_scope` | `monitor` | `monitor` | `monitor`, `all` | **UNIT TESTED** |
 | `[Snap]` | `snap_delay_ms` | 80 | 80 | 60..5000 | **UNIT TESTED** |
 | `[Snap]` | `snap_save` | true | true | boolean | **UNIT TESTED** |
 | `[Snap]` | `snap_keep_count` | 20 | 20 | 1..500 | **UNIT TESTED** |
-| `[GhostWriter]` | `ghost_delay_ms` | 0 | 0 | 0..5000 | **UNIT TESTED** |
-| `[GhostWriter]` | `ghost_newline` | `space` | `space` | `space`, `return`, `skip` | **UNIT TESTED** |
-| `[GhostWriter]` | `ghost_tab` | `space` | `space` | `space`, `tab`, `skip` | **UNIT TESTED** |
-| `[GhostWriter]` | `ghost_max_chars` | 100000 | 100000 | 0..5000000 | **UNIT TESTED** |
 
 ---
 
 ## Toasts and diagnostics
 
-The writer uses `Typing cancelled`, `Stopped: focus changed`, `Stopped: unsupported character`,
-`Nothing to type`, `No focused app`, and `Target runs as administrator` as appropriate. Completion is
-`Typed N chars in <app>`. Formatting helpers are unit tested; final rendering and visibility belong to
-Windows steps 3 and 12–14. Snap uses camera/snapping/checkmark/failure states and reports actual
-capture, save and clipboard publication outcomes separately.
+Snap uses camera/snapping/checkmark/failure states and reports actual capture, save and clipboard publication outcomes separately.
 
 ## Automated results
 

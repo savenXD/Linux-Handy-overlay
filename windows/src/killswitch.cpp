@@ -65,6 +65,10 @@ LRESULT CALLBACK PromptProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             EndPaint(hwnd, &ps);
             return 0;
         }
+        case WM_KEYDOWN:
+        case WM_SYSKEYDOWN:
+            if (wp == VK_ESCAPE) { Dismiss(); return 0; }
+            return DefWindowProcW(hwnd, msg, wp, lp);
         case WM_ERASEBKGND:
             return 1;
         case WM_MOUSEACTIVATE:

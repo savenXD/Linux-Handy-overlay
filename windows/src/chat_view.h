@@ -1,7 +1,7 @@
 #pragma once
 #include "common.h"
 namespace cronq {
-namespace browser {
+namespace chat_view {
 void Recover(unsigned index, unsigned generation);
 void RefreshAppearance();
 bool Init(HWND parent);
@@ -10,19 +10,9 @@ bool IsAvailable();
 bool IsUiVisible();
 const std::string& FailureReason();
 void SetActiveApp(const std::string&);
-void Load(const std::string&);
-void LoadInBrowser(const std::string&);
-void LoadInChatGpt(const std::string&);
 void GoBack();
-void GoForward();
 void Reload();
-void Stop();
-void GoHome();
 bool CanGoBack();
-bool IsLoading();
-double Progress();
-std::string CurrentUri();
-std::string CurrentTitle();
 void Pause();
 void Resume();
 void UniversalReset();
@@ -32,10 +22,10 @@ bool HasPopup();
 void ClosePopup();
 bool PostUiMessage(const std::string&);
 
+void PrepareTypingTarget();
+void CheckTypingHover();
 void DispatchKeyEvent(WPARAM vk, LPARAM lParam);
 void DispatchClipboardAction(WPARAM vk, LPARAM lParam);
 void PasteImageOrText();
-void SetUrlInputFocused(bool focused);
-void NotifyPointerClick();
-}  // namespace browser
+}  // namespace chat_view
 }  // namespace cronq

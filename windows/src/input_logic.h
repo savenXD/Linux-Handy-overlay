@@ -3,7 +3,7 @@
 namespace cronq {
 namespace input_logic {
 struct Context {
-    bool target = false, exclusive = false, shield = false, ctrlOnly = false, guard = false, hotkey = false;
+    bool target = false, shield = false, ctrlOnly = false, hotkey = false;
     // Windows' own key state before this event: false means the key is really up, so a
     // remembered "held" entry is stale (its release went to a secure desktop or an elevated
     // window, where the hook never runs) and this press must be treated as a fresh one.
@@ -18,7 +18,7 @@ class Router {
     void Reset() { held_.fill(Held::None); }
 
    private:
-    enum class Held { None, Pass, Mirror, Exclusive, Shield, Hotkey };
+    enum class Held { None, Pass, Overlay, Shield, Hotkey };
     std::array<Held, 256> held_{};
 };
 

@@ -1,15 +1,12 @@
 #include "app.h"
 
 #include "config.h"
-#include "browser.h"
-#include "ghost.h"
+#include "chat_view.h"
 #include "hotkey.h"
 #include "input.h"
 #include "ipc.h"
-#include "jsonlite.h"
 #include "overlay.h"
 #include "snap.h"
-#include "ui_bridge.h"
 #include "theme.h"
 
 #include <cstdio>
@@ -21,22 +18,11 @@ namespace app {
 
 namespace {
 
-std::string g_testEntry;
-
 bool StartsWith(const std::string& s, const char* prefix) {
     return s.compare(0, strlen(prefix), prefix) == 0;
 }
 
 }  // namespace
-
-const std::string& TestEntryText() { return g_testEntry; }
-
-void SetTestEntryText(const std::string& text, bool notifyUi) {
-    g_testEntry = text;
-    if (notifyUi) {
-        ui::PostToUi("{\"type\":\"set-text\",\"value\":\"" + json::Escape(g_testEntry) + "\"}");
-    }
-}
 
 std::string HandleCommand(const std::string& rawLine) {
     const std::string line = Trim(rawLine);
@@ -51,52 +37,42 @@ std::string HandleCommand(const std::string& rawLine) {
     } else if (EqNoCase(line, "KILL") || EqNoCase(line, "QUIT") || EqNoCase(line, "EXIT")) {
         Log("MAIN", "Termination requested via IPC.");
         PostMessageW(overlay::Hwnd(), WM_CRONQ_QUIT, 0, 0);  // reply first, quit after the reply is queued
-    } else if (EqNoCase(line, "MODE mirror")) {
-        input::SetKeyMode(KeyMode::Mirror);
-    } else if (EqNoCase(line, "MODE exclusive")) {
-        input::SetKeyMode(KeyMode::Exclusive);
+    } else if (EqNoCase(line, "MODE normal")) {
+        input::ReleaseGrab();
+    } else if (EqNoCase(line, "MODE overlay")) {
+        input::SetTypingTarget(input::TypingTarget::Overlay);
     } else if (EqNoCase(line, "MODE")) {
-        input::CycleKeyMode();
+        input::ToggleTypingTarget();
     } else if (EqNoCase(line, "GHOST on")) {
         input::SetGhostMode(input::GhostMode::On);
     } else if (EqNoCase(line, "GHOST off")) {
         input::SetGhostMode(input::GhostMode::Off);
     } else if (EqNoCase(line, "GHOST")) {
         input::ToggleGhostMode();
-    } else if (StartsWith(line, "LOAD ")) {
-        overlay::SwitchApp("browser");
-        browser::LoadInBrowser(line.substr(5));
     } else if (StartsWith(line, "APP ")) {
-        overlay::SwitchApp(Trim(line.substr(4)));
+        const auto name = Trim(line.substr(4));
+        if (EqNoCase(name, "home") || EqNoCase(name, "chatgpt")) overlay::SwitchApp(name);
+        else resp = "UNKNOWN_APP\n";
     } else if (EqNoCase(line, "BACK")) {
         overlay::Back();
     } else if (EqNoCase(line, "HOME")) {
         overlay::SwitchApp("home");
     } else if (EqNoCase(line, "RELOAD")) {
-        browser::Reload();
+        chat_view::Reload();
     } else if (EqNoCase(line, "UNIVERSAL_RESET") || EqNoCase(line, "RESET")) {
         overlay::UniversalReset();
-    } else if (EqNoCase(line, "GET_TEST_ENTRY")) {
-        resp = g_testEntry + "\n";
-    } else if (EqNoCase(line, "CLEAR_TEST_ENTRY")) {
-        SetTestEntryText("", true);
-    } else if (StartsWith(line, "SET_TEST_ENTRY")) {
-        std::string val = (line.size() > 14 && line[14] == ' ') ? line.substr(15) : line.substr(14);
-        SetTestEntryText(val, true);
     } else if (EqNoCase(line, "HAS_MODAL")) {
-        resp = browser::HasPopup() ? "TRUE\n" : "FALSE\n";
+        resp = chat_view::HasPopup() ? "TRUE\n" : "FALSE\n";
     } else if (EqNoCase(line, "CLOSE_MODAL")) {
-        browser::ClosePopup();
+        chat_view::ClosePopup();
     } else if (EqNoCase(line, "SNAP")) {
         snap::Run();
     } else if (EqNoCase(line, "SNAP_WGC")) {
         snap::RunExperimental();
     } else if (EqNoCase(line, "SNAP_WGC_WINDOW")) {
         snap::RunExperimentalWindow();
-    } else if (EqNoCase(line, "GHOST_WRITE")) {
-        ghost::Run();
     } else if (EqNoCase(line, "PASTE")) {
-        browser::PasteImageOrText();
+        chat_view::PasteImageOrText();
     } else if (StartsWith(line, "SET_OPACITY ")) {
         overlay::SetOpacity(strtod(line.c_str() + 12, nullptr));
     } else if (EqNoCase(line, "GET_OPACITY")) {
@@ -124,7 +100,7 @@ std::string HandleCommand(const std::string& rawLine) {
     } else if (EqNoCase(line, "STATUS")) {
         char buf[256];
         snprintf(buf, sizeof(buf), "MODE=%s TARGET=%s GHOST=%s GRAB=%s VISIBLE=%s APP=%s LOCKED=%s APPEARANCE=%d\n",
-                 input::GetKeyMode() == KeyMode::Exclusive ? "EXCLUSIVE" : "MIRROR",
+                 input::GetTypingTarget() == input::TypingTarget::Overlay ? "OVERLAY" : "NORMAL",
                  input::GetTypingTarget() == input::TypingTarget::Overlay ? "OVERLAY" : "NONE",
                  input::GetGhostMode() == input::GhostMode::On ? "GHOST" : "SOLID",
                  input::GetGrabStatus() == input::GrabStatus::Active
@@ -141,6 +117,10 @@ std::string HandleCommand(const std::string& rawLine) {
 
 LRESULT OnAppMessage(UINT msg, WPARAM wParam, LPARAM lParam) {
     switch (msg) {
+        case WM_CRONQ_INPUT_STATE:
+            if (!hotkey::IsHookInstalled()) input::ReleaseGrab();
+            overlay::QueueDraw();
+            return 0;
         case WM_CRONQ_IPC: {
             ipc::Request* r = reinterpret_cast<ipc::Request*>(wParam);
             r->response = HandleCommand(r->line);
@@ -163,19 +143,16 @@ LRESULT OnAppMessage(UINT msg, WPARAM wParam, LPARAM lParam) {
                 HWND hit = WindowFromPoint(pt);
                 inside = hit && GetAncestor(hit, GA_ROOT) == overlay::Hwnd();
             }
-            if (inside) browser::NotifyPointerClick();
             input::OnMouseClick(inside);
             return 0;
         }
         case WM_CRONQ_KEY:
-            input::OnKeyActivity();
             if (input::GetTypingTarget() == input::TypingTarget::Overlay || !(lParam & 1))
-                browser::DispatchKeyEvent(wParam, lParam);
+                chat_view::DispatchKeyEvent(wParam, lParam);
             return 0;
         case WM_CRONQ_CLIPBOARD:
-            input::OnKeyActivity();
             if (input::GetTypingTarget() == input::TypingTarget::Overlay || !(lParam & 1))
-                browser::DispatchClipboardAction(wParam, lParam);
+                chat_view::DispatchClipboardAction(wParam, lParam);
             return 0;
         case WM_CRONQ_QUIT:
             Log("MAIN", "Shutdown requested.");

@@ -43,11 +43,9 @@ void        overlay_set_opacity(double opacity);
 double      overlay_get_opacity(void);
 void        overlay_set_size(int width, int height);
 void        overlay_set_compact_mode(gboolean compact);
-void        overlay_toggle_ghost_input(void);
 void        overlay_set_fullscreen(void);
 void        overlay_set_default_size(void);
 
-#include "ghost.h"
 
 void        overlay_switch_app(const char *app_name);
 const char *overlay_get_current_app(void);
@@ -58,19 +56,10 @@ void        overlay_universal_reset(void);
 void        overlay_snap(void);
 void        overlay_capture_begin(void);
 void        overlay_capture_end(void);
-void        overlay_set_ghost_button_state(GhostButtonState state);
-void        overlay_ghost_progress(size_t typed, size_t total);
 void        overlay_show_toast(const char *msg);
 
 GtkWidget  *overlay_get_window_widget(void);
-GtkWidget  *overlay_get_entry_widget(void);
-GtkWidget  *overlay_get_test_entry(void);
-GtkWidget  *overlay_get_url_entry(void);
 
-const char *overlay_get_test_entry_text(void);
-const char *overlay_get_entry_text(void);
-void        overlay_clear_entry_text(void);
-void        overlay_set_entry_text(const char *text);
 
 void        overlay_execute_clipboard_action(ClipboardAction action);
 void        overlay_show_popup_modal(GtkWidget *popup_view);

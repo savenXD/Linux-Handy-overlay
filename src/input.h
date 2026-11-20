@@ -7,11 +7,6 @@
 #include <X11/Xlib.h>
 
 typedef enum {
-    KEY_MODE_MIRROR = 0,
-    KEY_MODE_EXCLUSIVE = 1
-} KeyMode;
-
-typedef enum {
     TYPING_TARGET_NONE = 0,
     TYPING_TARGET_OVERLAY = 1
 } TypingTarget;
@@ -30,9 +25,7 @@ typedef enum {
 gboolean     input_init(void);
 void         input_cleanup(void);
 
-KeyMode      input_get_key_mode(void);
-void         input_set_key_mode(KeyMode mode);
-void         input_cycle_key_mode(void);
+void         input_toggle_typing_target(void);
 
 TypingTarget input_get_typing_target(void);
 void         input_set_typing_target(TypingTarget target);

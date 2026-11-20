@@ -25,7 +25,7 @@ void        theme_toggle_camo(void);    /* Alt+C */
 void        theme_toggle_text(void);    /* Alt+T */
 void        theme_reload_from_config(void);  /* after config reload / SIGHUP */
 
-/* Helpers used by window.c / browser.c */
+/* Helpers used by window.c / chat_view.c */
 char       *theme_build_css(const char *base_dark_css);   /* caller g_free()s */
 char       *theme_recolor_svg(const char *svg);           /* caller g_free()s */
 const char *theme_fg_hex(void);                           /* "#000000" / "#ffffff" etc. */

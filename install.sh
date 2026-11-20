@@ -61,24 +61,24 @@ if [ "$NEED_DEPS" -eq 1 ]; then
         sudo apt-get update
         sudo apt-get install -y build-essential pkg-config libgtk-3-dev \
             libwebkit2gtk-4.1-dev libx11-dev libxi-dev libxtst-dev \
-            libxrandr-dev libxext-dev xdotool xclip maim || \
+            libxrandr-dev libxext-dev xdotool xclip maim python3 || \
         sudo apt-get install -y build-essential pkg-config libgtk-3-dev \
             libwebkit2gtk-4.0-dev libx11-dev libxi-dev libxtst-dev \
-            libxrandr-dev libxext-dev xdotool xclip maim
+            libxrandr-dev libxext-dev xdotool xclip maim python3
     elif command -v dnf >/dev/null 2>&1; then
         echo -e "${CYAN}Detected Fedora / RHEL (dnf)...${NC}"
         sudo dnf install -y gcc gcc-c++ make pkgconf-pkg-config \
             gtk3-devel webkit2gtk4.1-devel libX11-devel libXi-devel \
-            libXtst-devel libXrandr-devel libXext-devel xdotool xclip maim
+            libXtst-devel libXrandr-devel libXext-devel xdotool xclip maim python3
     elif command -v pacman >/dev/null 2>&1; then
         echo -e "${CYAN}Detected Arch Linux / Manjaro (pacman)...${NC}"
         sudo pacman -S --needed --noconfirm base-devel gtk3 webkit2gtk-4.1 \
-            libx11 libxi libxtst libxrandr libxext xdotool xclip maim
+            libx11 libxi libxtst libxrandr libxext xdotool xclip maim python3
     elif command -v zypper >/dev/null 2>&1; then
         echo -e "${CYAN}Detected openSUSE (zypper)...${NC}"
         sudo zypper install -y gcc gcc-c++ make pkg-config gtk3-devel \
             webkit2gtk3-devel libX11-devel libXi-devel libXtst-devel \
-            libXrandr-devel libXext-devel xdotool xclip maim
+            libXrandr-devel libXext-devel xdotool xclip maim python3
     else
         echo -e "${RED}Error: Unsupported package manager. Please install GTK3, WebKitGTK 4.1, and X11 development libraries manually.${NC}"
         exit 1

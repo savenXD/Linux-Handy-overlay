@@ -2,7 +2,6 @@
 
 #include <cctype>
 #include "config.h"
-#include "ghost.h"
 #include "god_copy.h"
 #include "input.h"
 #include "input_logic.h"
@@ -49,9 +48,7 @@ volatile LONG g_rectRight = 0;
 volatile LONG g_rectBottom = 0;
 
 volatile LONG g_typingTarget = 0;   // 0 = None, 1 = Overlay
-volatile LONG g_keyMode = 0;        // 0 = Mirror, 1 = Exclusive
 volatile LONG g_shieldEnabled = 0;  // 1 = on
-volatile LONG g_guardActive = 0;    // 1 = ghost writer typing guard
 volatile LONG g_locked = 0;         // 1 = Alt+K lock: every hotkey except the unlock chord is off
 volatile LONG g_killPending = 0;    // 1 = kill confirmation is armed
 volatile LONG g_overlayVisible = 0; // 1 = overlay on screen; layout shortcuts only work then
@@ -59,9 +56,9 @@ volatile LONG g_overlayVisible = 0; // 1 = overlay on screen; layout shortcuts o
 int64_t DedupeUs(Id id) {
     switch (id) {
         case Id::Toggle:
-            return 150000;
+            return 200000;
         case Id::Ghost:
-            return 150000;
+            return 200000;
         case Id::OpacityDec:
             return 120000;
         case Id::OpacityInc:
@@ -77,9 +74,7 @@ int64_t DedupeUs(Id id) {
         case Id::SnapWgcWindow:
             return 200000;
         case Id::Mode:
-            return 150000;
-        case Id::GhostWrite:
-            return 200000;
+            return 0;  // physical key-down filtering already rejects held-key repeats
         case Id::Camouflage:
         case Id::Tone:
         case Id::DockLeft:
@@ -111,9 +106,7 @@ const char* Describe(Id id) {
         case Id::SnapWgcWindow:
             return "Alt+Shift+O -> Taking experimental WGC window snap";
         case Id::Mode:
-            return "Alt+Mode -> Cycling key mode";
-        case Id::GhostWrite:
-            return "Alt+W -> Ghost Write";
+            return "Alt+Mode -> Toggle typing target";
         case Id::GodCopy:
             return "Ctrl+Alt+C -> Read selected text";
         case Id::GodPaste:
@@ -245,7 +238,8 @@ LRESULT CALLBACK LowLevelKeyboardProc(int code, WPARAM wp, LPARAM lp) {
     Id id = godChord && vk == 'C' ? Id::GodCopy : godChord && vk == 'V' ? Id::GodPaste : vk == 'O' ? (mods == 9 ? Id::SnapWgcWindow : Id::SnapWgc) : vk == 'C' ? Id::Camouflage : vk == 'T' ? Id::Tone :
             vk == VK_LEFT ? Id::DockLeft : vk == VK_RIGHT ? Id::DockRight : Match(vk);
     input_logic::Context context;
-    if (IsLayoutHotkey(id) && !InterlockedCompareExchange(&g_overlayVisible, 0, 0)) id = Id::None;
+    if (IsLayoutHotkey(id) && !InterlockedCompareExchange(&g_overlayVisible, 0, 0) &&
+        !(id == Id::Mode && InterlockedCompareExchange(&g_typingTarget, 0, 0))) id = Id::None;
     context.hotkey = id != Id::None && (mods == 1 || ((kb->flags & LLKHF_ALTDOWN) && !(mods & 14)));
     if (id == Id::SnapWgcWindow) context.hotkey = mods == 9;  // Alt+Shift only; never Ctrl/Win
     if (id == Id::GodCopy || id == Id::GodPaste) context.hotkey = godChord;
@@ -294,13 +288,17 @@ LRESULT CALLBACK LowLevelKeyboardProc(int code, WPARAM wp, LPARAM lp) {
         // Locked: swallow the chord keys (no action, id stays None) so the focused app never sees Alt+K / Alt+X.
         context.hotkey = true;
     }
-    context.guard = InterlockedCompareExchange(&g_guardActive, 0, 0) != 0;
     context.target = InterlockedCompareExchange(&g_typingTarget, 0, 0) != 0;
-    context.exclusive = InterlockedCompareExchange(&g_keyMode, 0, 0) != 0;
     context.shield = InterlockedCompareExchange(&g_shieldEnabled, 0, 0) != 0;
     context.ctrlOnly = mods == 2;
     context.osHeld = osHeld;
     const auto route = g_router.Key(vk, down, context);
+    // Escape must dismiss even if its original press belonged to another recipient
+    // (for example, held before the confirmation appeared). The router intentionally
+    // preserves that press's ownership, so it may not classify a repeat as a hotkey.
+    const bool cancelPrompt = lockAction == lock_logic::Action::KillCancel;
+    if (cancelPrompt && !route.hotkey)
+        PostMessageW(g_target, WM_CRONQ_HOTKEY, static_cast<WPARAM>(Id::KillCancel), 0);
     // Snapshot modifiers before the asynchronous UI handoff. Never query UI-thread keyboard state later.
     LPARAM packed = (down ? 1 : 0) | (static_cast<LPARAM>(mods) << 1) |
                     (InterlockedCompareExchange(&g_capsLock, 0, 0) ? (1 << 6) : 0) |
@@ -308,7 +306,7 @@ LRESULT CALLBACK LowLevelKeyboardProc(int code, WPARAM wp, LPARAM lp) {
                     (static_cast<LPARAM>(kb->scanCode & 255) << 16) |
                     ((kb->flags & LLKHF_EXTENDED) ? (1 << 24) : 0) | (route.repeat ? (1 << 25) : 0);
     if (up && (vk == VK_MENU || vk == VK_LMENU || vk == VK_RMENU)) g_suppressorSent = false;
-    if (route.hotkey && !((id==Id::Camouflage || id==Id::Tone || id==Id::DockLeft || id==Id::DockRight || id==Id::GodCopy || id==Id::GodPaste) && wasDown)) {
+    if (route.hotkey && !((id==Id::Mode || id==Id::Camouflage || id==Id::Tone || id==Id::DockLeft || id==Id::DockRight || id==Id::GodCopy || id==Id::GodPaste) && wasDown)) {
         PostMessageW(g_target, WM_CRONQ_HOTKEY, static_cast<WPARAM>(id),
                      (id == Id::GodCopy || id == Id::GodPaste) ? reinterpret_cast<LPARAM>(GetForegroundWindow()) : 0);
         if (!g_suppressorSent) {
@@ -316,7 +314,7 @@ LRESULT CALLBACK LowLevelKeyboardProc(int code, WPARAM wp, LPARAM lp) {
             PostMessageW(g_target, WM_CRONQ_ALTFIX, 0, 0);
         }
     }
-    if (route.forward) PostMessageW(g_target, WM_CRONQ_KEY, vk, packed);
+    if (route.forward && !cancelPrompt) PostMessageW(g_target, WM_CRONQ_KEY, vk, packed);
     if (route.clipboard) PostMessageW(g_target, WM_CRONQ_CLIPBOARD, vk, down ? 1 : 0);
     if (down) g_swallowedDown[vk] = route.swallow;
     if (up) g_swallowedDown[vk] = false;
@@ -325,7 +323,7 @@ LRESULT CALLBACK LowLevelKeyboardProc(int code, WPARAM wp, LPARAM lp) {
 
 // The low-level mouse hook runs for every mouse movement on the whole system (1000+ times a second
 // with gaming mice) and adds latency to the cursor when Cronq is busy. It is only needed to notice
-// clicks on or away from the overlay, so it exists only while the overlay is on screen.
+// clicks on or away from the overlay, including while hidden typing is active.
 void SetMouseHook(bool wanted) {
     if (wanted && !g_mouseHook && !InterlockedCompareExchange(&g_stopping, 0, 0)) {
         g_mouseHook = SetWindowsHookExW(WH_MOUSE_LL, LowLevelMouseProc, GetModuleHandleW(nullptr), 0);
@@ -343,8 +341,11 @@ void InstallHooksInternal() {
     if (!g_kbdHook) {
         LogErr("HOTKEY", "SetWindowsHookEx(WH_KEYBOARD_LL) failed (%lu).", GetLastError());
     }
-    SetMouseHook(InterlockedCompareExchange(&g_overlayVisible, 0, 0) != 0);
-    InterlockedExchange(&g_installed, g_kbdHook ? 1 : 0);
+    SetMouseHook(InterlockedCompareExchange(&g_overlayVisible, 0, 0) != 0 ||
+                 InterlockedCompareExchange(&g_typingTarget, 0, 0) != 0);
+    const LONG installed = g_kbdHook ? 1 : 0;
+    if (InterlockedExchange(&g_installed, installed) != installed && g_target)
+        PostMessageW(g_target, WM_CRONQ_INPUT_STATE, 0, 0);
 }
 
 void CALLBACK ReinstallProc(HWND, UINT, UINT_PTR, DWORD) {
@@ -375,7 +376,8 @@ DWORD WINAPI HookThreadProc(LPVOID) {
     MSG msg;
     while (GetMessageW(&msg, nullptr, 0, 0) > 0) {
         if (msg.message == kMouseHookMessage) {
-            SetMouseHook(msg.wParam != 0);
+            SetMouseHook(InterlockedCompareExchange(&g_overlayVisible, 0, 0) != 0 ||
+                         InterlockedCompareExchange(&g_typingTarget, 0, 0) != 0);
             continue;
         }
         if (msg.message == kReinstallMessage || msg.message == kResyncMessage) {
@@ -401,7 +403,6 @@ DWORD WINAPI HookThreadProc(LPVOID) {
     }
     InterlockedExchange(&g_installed, 0);
     InterlockedExchange(&g_typingTarget, 0);
-    InterlockedExchange(&g_keyMode, 0);
     return 0;
 }
 
@@ -414,13 +415,13 @@ void UpdateOverlayRect(int left, int top, int right, int bottom) {
     InterlockedExchange(&g_rectBottom, bottom);
 }
 
-void SetTypingTarget(int target) { InterlockedExchange(&g_typingTarget, target); }
+void SetTypingTarget(int target) {
+    InterlockedExchange(&g_typingTarget, target);
+    if (g_hookThreadId) PostThreadMessageW(g_hookThreadId, kMouseHookMessage, 0, 0);
+}
 
-void SetKeyMode(int mode) { InterlockedExchange(&g_keyMode, mode); }
 
 void SetClipboardShield(bool enabled) { InterlockedExchange(&g_shieldEnabled, enabled ? 1 : 0); }
-
-void SetTypingGuard(bool active) { InterlockedExchange(&g_guardActive, active ? 1 : 0); }
 
 bool IsHookInstalled() { return InterlockedCompareExchange(&g_installed, 0, 0) != 0; }
 
@@ -452,14 +453,13 @@ void ReloadKeys() {
     g_vk[(int)Id::Snap] = VkFromChar(cfg.snapKey ? cfg.snapKey : 'p');
     g_vk[(int)Id::SnapWgc] = 'O';
     g_vk[(int)Id::Mode] = VkFromChar(cfg.modeKey ? cfg.modeKey : 'm');
-    g_vk[(int)Id::GhostWrite] = VkFromChar(cfg.ghostWriterKey ? cfg.ghostWriterKey : 'w');
     LeaveCriticalSection(&g_vkCs);
 
     Log("HOTKEY",
         "Hotkeys: Alt+%c toggle, Alt+%c ghost, Alt+A/S opacity, Alt+F fullscreen, Alt+D default size, "
-        "Alt+%c snap, Alt+O WGC monitor, Alt+Shift+O WGC window, Alt+%c mode, Alt+%c ghost writer; Ctrl+Left Alt+C/V selected-text copy/paste.",
+        "Alt+%c snap, Alt+O WGC monitor, Alt+Shift+O WGC window, Alt+%c mode; Ctrl+Left Alt+C/V selected-text copy/paste.",
         (char)toupper(cfg.toggleKey), (char)toupper(cfg.ghostKey), (char)toupper(cfg.snapKey),
-        (char)toupper(cfg.modeKey), (char)toupper(cfg.ghostWriterKey));
+        (char)toupper(cfg.modeKey));
 }
 
 bool Init(HWND target) {
@@ -496,7 +496,6 @@ bool Init(HWND target) {
 void Cleanup() {
     InterlockedExchange(&g_stopping, 1);
     InterlockedExchange(&g_typingTarget, 0);
-    InterlockedExchange(&g_keyMode, 0);
     if (g_hookThread) {
         PostThreadMessageW(g_hookThreadId, WM_QUIT, 0, 0);
         if (WaitForSingleObject(g_hookThread, 2000) != WAIT_OBJECT_0) {
@@ -549,7 +548,6 @@ void Dispatch(Id id, HWND source) {
 
     switch (id) {
         case Id::Toggle:
-            input::ReleaseGrab();
             overlay::Toggle();
             break;
         case Id::Ghost:
@@ -568,8 +566,7 @@ void Dispatch(Id id, HWND source) {
             overlay::SetDefaultSize();
             break;
         case Id::Mode:
-            input::ReleaseGrab();
-            input::CycleKeyMode();
+            input::ToggleTypingTarget();
             break;
         case Id::Snap:
             snap::Run();
@@ -579,9 +576,6 @@ void Dispatch(Id id, HWND source) {
             break;
         case Id::SnapWgcWindow:
             snap::RunExperimentalWindow();
-            break;
-        case Id::GhostWrite:
-            ghost::Run();
             break;
         case Id::Camouflage:
             if (!theme::ToggleCamouflage()) overlay::ShowToast("Could not save appearance");
@@ -601,7 +595,6 @@ void Dispatch(Id id, HWND source) {
             break;
         case Id::Lock:
             god_copy::Cleanup();
-            ghost::Cancel();
             input::ReleaseGrab();
             overlay::Hide();
             break;

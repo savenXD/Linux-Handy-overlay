@@ -1,9 +1,9 @@
 // Native WebView2 acceptance checks using a local ChatGPT-shaped fixture, never the user's account.
-#include "../src/browser.cpp"
+#include "../src/chat_view.cpp"
 #include "theme.h"
 #include <cstdio>
 using namespace cronq;
-using namespace cronq::browser;
+using namespace cronq::chat_view;
 template<class F> bool Wait(F condition, DWORD timeout=15000) {
     auto end=GetTickCount64()+timeout;
     do { MSG msg; while(PeekMessageW(&msg,nullptr,0,0,PM_REMOVE)){TranslateMessage(&msg);DispatchMessageW(&msg);} if(condition())return true; Sleep(10); }while(GetTickCount64()<end);
@@ -53,12 +53,13 @@ int main(int argc, char**) {
             check("ChatGPT theme class applied",Wait([&]{return Eval(kChat,light?L"document.documentElement.classList.contains('light')":L"document.documentElement.classList.contains('dark')")=="true";}));
             check("site receives preferred color scheme",Eval(kChat,light?L"matchMedia('(prefers-color-scheme: light)').matches":L"matchMedia('(prefers-color-scheme: dark)').matches")=="true");
             check("ChatGPT palette applied",Eval(kChat,L"getComputedStyle(document.documentElement).getPropertyValue('--bg-primary').trim()") == "\""+theme_logic::Hex(theme::Get().background)+"\"");
-            check("Cronq controls hidden only in camouflage",Eval(kUi,L"getComputedStyle(document.querySelector('.status-bar')).display==='none'") == (mode>=2 ? "true" : "false"));
+            check("typing indicator remains visible in every appearance",Eval(kUi,L"getComputedStyle(document.querySelector('.status-bar')).display!=='none'&&getComputedStyle(document.getElementById('mode')).display!=='none'")=="true");
+            check("other Cronq controls hidden only in camouflage",Eval(kUi,L"getComputedStyle(document.getElementById('appearance')).display==='none'") == (mode>=2 ? "true" : "false"));
             check("ChatGPT controls hidden only in camouflage",Eval(kChat,L"getComputedStyle(document.querySelector('header')).display==='none'&&getComputedStyle(document.querySelector('aside')).display==='none'&&getComputedStyle(document.querySelector('article button')).display==='none'") == (mode>=2 ? "true" : "false"));
             check("essential ChatGPT text and composer stay visible",Eval(kChat,L"getComputedStyle(document.querySelector('article p')).display!=='none'&&getComputedStyle(document.querySelector('textarea')).display!=='none'&&getComputedStyle(document.querySelector('[data-testid=send-button]')).display!=='none'")=="true");
             if(mode>=2){
                 check("camouflage is borderless",Eval(kUi,L"getComputedStyle(document.querySelector('.phone-root')).borderTopWidth")=="\"0px\"");
-                check("home shows icons only",Eval(kUi,L"getComputedStyle(document.querySelector('.app-label')).display==='none'&&getComputedStyle(document.querySelector('.home-search-bar')).display==='none'")=="true");
+                check("home shows icons only",Eval(kUi,L"getComputedStyle(document.querySelector('.app-label')).display==='none'&&document.querySelector('.home-search-bar')===null")=="true");
                 check("ChatGPT background is transparent",Eval(kChat,L"getComputedStyle(document.body).backgroundColor")=="\"rgba(0, 0, 0, 0)\"");
                 check("page wrapper backgrounds removed",Eval(kChat,L"getComputedStyle(document.getElementById('root')).backgroundImage")=="\"none\"");
                 check("camouflage text color follows Light/Dark",Eval(kChat,L"getComputedStyle(document.querySelector('article p')).color")== (mode==2 ? "\"rgb(0, 0, 0)\"" : "\"rgb(255, 255, 255)\""));

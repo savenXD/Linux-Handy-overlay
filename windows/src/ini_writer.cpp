@@ -2,9 +2,6 @@
 
 #include <algorithm>
 #include <cctype>
-#include <cstdlib>
-#include <cerrno>
-#include <climits>
 #include <sstream>
 #include <vector>
 
@@ -166,54 +163,6 @@ bool SetIniString(std::string& text, const char* section, const char* key, const
     text += "[" + targetSec + "]" + eol;
     text += targetKey + " = " + valStr + eol;
     return true;
-}
-
-int GetIniInt(const std::string& text, const char* section, const char* key, int defaultValue) {
-    if (!section || !key) return defaultValue;
-    auto lines = SplitLines(text);
-    bool inTargetSec = false;
-
-    for (const auto& line : lines) {
-        std::string trimmed = Trim(line.text);
-        if (trimmed.empty()) continue;
-
-        if (trimmed.front() == '[' && trimmed.back() == ']') {
-            std::string secName = Trim(trimmed.substr(1, trimmed.size() - 2));
-            if (inTargetSec) {
-                return defaultValue;  // left target section
-            }
-            if (EqNoCase(secName, section)) {
-                inTargetSec = true;
-            }
-            continue;
-        }
-
-        if (inTargetSec) {
-            if (trimmed.front() == '#' || trimmed.front() == ';') continue;
-            size_t eqPos = line.text.find('=');
-            if (eqPos == std::string::npos) eqPos = line.text.find(':');
-            if (eqPos != std::string::npos) {
-                std::string k = Trim(line.text.substr(0, eqPos));
-                if (EqNoCase(k, key)) {
-                    std::string v = Trim(line.text.substr(eqPos + 1));
-                    size_t commPos = v.find_first_of(";#");
-                    if (commPos != std::string::npos) {
-                        v = Trim(v.substr(0, commPos));
-                    }
-                    if (v.empty()) return defaultValue;
-                    char* end = nullptr;
-                    errno = 0;
-                    long val = std::strtol(v.c_str(), &end, 10);
-                    if (end && end != v.c_str() && *end == 0 && errno != ERANGE && val >= INT_MIN &&
-                        val <= INT_MAX) {
-                        return static_cast<int>(val);
-                    }
-                    return defaultValue;
-                }
-            }
-        }
-    }
-    return defaultValue;
 }
 
 }  // namespace ini_writer
